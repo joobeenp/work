@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
 import '../services/api_service.dart';
 import 'dart:convert';
 import 'searched_screen.dart';
@@ -18,10 +20,8 @@ class _SearchScreenState extends State<SearchScreen> {
   bool onlyFavorites = false;
   String _searchQuery = '';
   String? _currentGu;
+  String currentRegionLabel = '[현재 지역]';
 
-  // ----------------------------
-  // Constants
-  // ----------------------------
   static const Map<String, List<String>> tagData = {
     '길 유형': ['포장도로', '비포장도로', '등산로', '짧은 산책로', '긴 산책로', '운동용 산책로'],
     '이동수단': ['걷기', '뜀걸음', '자전거', '휠체어', '유모차'],
@@ -51,14 +51,46 @@ class _SearchScreenState extends State<SearchScreen> {
     '기장군': ['기장읍','정관읍','일광읍','철마면','장안읍'],
   };
 
-  // 선택된 태그
+  static const List<String> seoulGus = [
+    '강남구','강동구','강북구','강서구','관악구','광진구','구로구','금천구',
+    '노원구','도봉구','동대문구','동작구','마포구','서대문구','서초구','성동구',
+    '성북구','송파구','양천구','영등포구','용산구','은평구','종로구','중구','중랑구',
+  ];
+
+  static const Map<String, List<String>> seoulDongs = {
+    '강남구': ['신사동','논현동','역삼동','삼성동','청담동','대치동','압구정동'],
+    '강동구': ['천호동','암사동','길동','성내동','둔촌동','명일동'],
+    '강북구': ['미아동','번동','수유동','우이동'],
+    '강서구': ['화곡동','등촌동','가양동','발산동','염창동'],
+    '관악구': ['봉천동','신림동','남현동','은천동'],
+    '광진구': ['자양동','구의동','광장동','화양동'],
+    '구로구': ['구로동','개봉동','오류동','항동'],
+    '금천구': ['가산동','독산동','시흥동'],
+    '노원구': ['상계동','중계동','하계동','공릉동'],
+    '도봉구': ['도봉동','창동','쌍문동','방학동'],
+    '동대문구': ['청량리동','회기동','휘경동','장안동'],
+    '동작구': ['사당동','대방동','노량진동','상도동'],
+    '마포구': ['합정동','망원동','상수동','연남동','공덕동'],
+    '서대문구': ['홍제동','연희동','북아현동','충정로동','신촌동'],
+    '서초구': ['서초동','반포동','잠원동','양재동','방배동'],
+    '성동구': ['왕십리동','행당동','금호동','성수동'],
+    '성북구': ['성북동','정릉동','돈암동','길음동','월곡동'],
+    '송파구': ['잠실동','가락동','문정동','석촌동','오금동','방이동'],
+    '양천구': ['목동','신정동','신월동','목5동'],
+    '영등포구': ['영등포동','당산동','양평동','신길동'],
+    '용산구': ['이태원동','한남동','용문동','서빙고동','후암동'],
+    '은평구': ['불광동','응암동','역촌동','녹번동','신사동'],
+    '종로구': ['종로','청운동','궁정동','평창동','사직동'],
+    '중구': ['명동','을지로동','필동','회현동','신당동'],
+    '중랑구': ['망우동','면목동','상봉동','신내동'],
+  };
+
   final Map<String, Set<String>> selectedTags = {
     '지역': {},
     '길 유형': {},
     '이동수단': {},
   };
 
-  // 매핑: region / roadType / transport → ID
   final Map<String, int> regionToId = {
     '중구/광복동': 1, '중구/남포동': 2, '중구/대청동': 3, '중구/동광동': 4, '중구/보수동': 5, '중구/부평동': 6,
     '서구/동대신동': 7, '서구/서대신동': 8, '서구/암남동': 9, '서구/아미동': 10, '서구/토성동': 11,
@@ -86,33 +118,53 @@ class _SearchScreenState extends State<SearchScreen> {
     '걷기': 201, '뜀걸음': 202, '자전거': 203, '휠체어': 204, '유모차': 205,
   };
 
-  // ----------------------------
-  // Helper Methods
-  // ----------------------------
+  @override
+  void initState() {
+    super.initState();
+    _initCurrentLocation();
+  }
+
+  Future<void> _initCurrentLocation() async {
+    try {
+      Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      List<Placemark> placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
+
+      if (placemarks.isNotEmpty) {
+        final placemark = placemarks.first;
+        String country = placemark.country ?? '';
+        if (country != '대한민국') {
+          setState(() => currentRegionLabel = '해외');
+        } else {
+          String gu = placemark.subAdministrativeArea ?? '';
+          String dong = placemark.subLocality ?? '';
+          setState(() => currentRegionLabel = '$gu $dong');
+          if (gu.isNotEmpty && dong.isNotEmpty) {
+            final tag = '$gu/$dong';
+            selectedTags['지역']?.add(tag);
+          }
+        }
+      }
+    } catch (_) {
+      setState(() => currentRegionLabel = '해외');
+    }
+  }
+
   void toggleDropdown(String name) {
     setState(() {
-      if (activeDropdown == name) {
-        activeDropdown = null;
-      } else {
-        activeDropdown = name;
-        if (name != '지역') _currentGu = null;
-      }
+      activeDropdown = activeDropdown == name ? null : name;
+      if (name != '지역') _currentGu = null;
     });
   }
 
   void toggleTag(String category, String tag) {
     setState(() {
-      if (selectedTags[category]!.contains(tag)) {
-        selectedTags[category]!.remove(tag);
-      } else {
-        selectedTags[category]!.add(tag);
-      }
+      selectedTags[category]!.contains(tag)
+          ? selectedTags[category]!.remove(tag)
+          : selectedTags[category]!.add(tag);
     });
   }
 
-  void toggleRegion(String gu, String dong) {
-    toggleTag('지역', '$gu/$dong');
-  }
+  void toggleRegion(String gu, String dong) => toggleTag('지역', '$gu/$dong');
 
   void resetSelection() {
     setState(() {
@@ -121,53 +173,34 @@ class _SearchScreenState extends State<SearchScreen> {
       activeDropdown = null;
       _currentGu = null;
       _searchQuery = '';
-    });
-  }
-
-  Map<String, List<String>> getFilteredTags() {
-    return selectedTags.map((key, value) {
-      final sortedList = value.toList()..sort();
-      return MapEntry(key, sortedList);
+      _initCurrentLocation();
     });
   }
 
   Map<String, dynamic> getSelectedTagData() {
     final Map<String, dynamic> result = {};
+
     selectedTags.forEach((category, tags) {
-      if (category == '지역') {
-        result[category] = tags.map((tag) => regionToId[tag]).whereType<int>().toList();
-      } else if (category == '길 유형') {
-        result[category] = tags.map((tag) => roadTypeToId[tag]).whereType<int>().toList();
-      } else if (category == '이동수단') {
-        result[category] = tags.map((tag) => transportToId[tag]).whereType<int>().toList();
-      }
+      List<int> ids = [];
+      if (category == '지역') ids = tags.map((t) => regionToId[t]).whereType<int>().toList();
+      if (category == '길 유형') ids = tags.map((t) => roadTypeToId[t]).whereType<int>().toList();
+      if (category == '이동수단') ids = tags.map((t) => transportToId[t]).whereType<int>().toList();
+
+      result[category] = ids;
     });
+
     return result;
   }
 
-  // ----------------------------
-  // Tag Chip Builder (통합)
-  // ----------------------------
+
   Widget buildTagChip(String category, String tag, {String? gu}) {
     final isSelected = selectedTags[category]!.contains(tag);
-    String labelText;
-
-    if (category == '지역' && gu != null) {
-      labelText = tag.split('/')[1]; // 동 이름 표시
-    } else {
-      labelText = tag;
-    }
+    final labelText = (category == '지역' && gu != null) ? tag.split('/')[1] : tag;
 
     return FilterChip(
       label: Text(labelText),
       selected: isSelected,
-      onSelected: (_) {
-        if (category == '지역' && gu != null) {
-          toggleRegion(gu, tag.split('/')[1]);
-        } else {
-          toggleTag(category, tag);
-        }
-      },
+      onSelected: (_) => category == '지역' && gu != null ? toggleRegion(gu, tag.split('/')[1]) : toggleTag(category, tag),
       backgroundColor: Colors.grey.shade200,
       selectedColor: Colors.blueAccent.shade100,
       showCheckmark: false,
@@ -176,19 +209,10 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
-  List<Widget> buildSelectedTagChips() {
-    final List<Widget> chips = [];
-    selectedTags.forEach((category, tags) {
-      for (final tag in tags) {
-        chips.add(buildTagChip(category, tag, gu: category == '지역' ? tag.split('/')[0] : null));
-      }
-    });
-    return chips;
-  }
+  List<Widget> buildSelectedTagChips() => selectedTags.entries.expand((e) =>
+      e.value.map((t) => buildTagChip(e.key, t, gu: e.key == '지역' ? t.split('/')[0] : null))
+  ).toList();
 
-  // ----------------------------
-  // UI Builders
-  // ----------------------------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -196,18 +220,12 @@ class _SearchScreenState extends State<SearchScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0.5,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black87),
-          onPressed: () => Navigator.pop(context),
-        ),
+        leading: IconButton(icon: const Icon(Icons.arrow_back, color: Colors.black87), onPressed: () => Navigator.pop(context)),
         title: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('[현재 지역]', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600, fontSize: 18)),
-            TextButton(
-              onPressed: resetSelection,
-              child: const Text('초기화', style: TextStyle(color: Colors.blueAccent, fontSize: 14)),
-            ),
+            Text(currentRegionLabel, style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w600, fontSize: 18)),
+            TextButton(onPressed: resetSelection, child: const Text('초기화', style: TextStyle(color: Colors.blueAccent, fontSize: 14))),
           ],
         ),
       ),
@@ -234,10 +252,8 @@ class _SearchScreenState extends State<SearchScreen> {
                         border: Border.all(color: Colors.grey.shade400),
                       ),
                       child: Center(
-                        child: Text(
-                          '즐겨찾기',
-                          style: TextStyle(color: onlyFavorites ? Colors.white : Colors.black87, fontWeight: FontWeight.w500),
-                        ),
+                        child: Text('즐겨찾기',
+                            style: TextStyle(color: onlyFavorites ? Colors.white : Colors.black87, fontWeight: FontWeight.w500)),
                       ),
                     ),
                   ),
@@ -338,18 +354,71 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Widget buildSimpleTagGrid(String category) {
     final tags = tagData[category]!;
-    return Wrap(
-      spacing: 8,
-      runSpacing: 6,
-      children: tags.map((tag) => buildTagChip(category, tag)).toList(),
-    );
+    return Wrap(spacing: 8, runSpacing: 6, children: tags.map((tag) => buildTagChip(category, tag)).toList());
   }
 
   Widget buildRegionDropdown() {
-    final filteredGus = busanGus.where((gu) {
-      return gu.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          busanDongs[gu]!.any((dong) => dong.toLowerCase().contains(_searchQuery.toLowerCase()));
-    }).toList();
+    final Map<String, List<String>> allDongs = {...busanDongs, ...seoulDongs};
+
+    List<String> filteredBusanGus = busanGus.where((gu) =>
+    gu.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+        busanDongs[gu]!.any((dong) => dong.toLowerCase().contains(_searchQuery.toLowerCase()))
+    ).toList();
+
+    List<String> filteredSeoulGus = seoulGus.where((gu) =>
+    gu.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+        seoulDongs[gu]!.any((dong) => dong.toLowerCase().contains(_searchQuery.toLowerCase()))
+    ).toList();
+
+    Widget buildGuTile(String gu, List<String> dongs) {
+      final filteredDongs = dongs.where((dong) => dong.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
+      final allSelected = filteredDongs.every((dong) => selectedTags['지역']!.contains('$gu/$dong'));
+
+      return Card(
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        elevation: 1,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        child: ExpansionTile(
+          initiallyExpanded: false,
+          title: Row(
+            children: [
+              Icon(Icons.location_city, size: 20, color: Colors.blueAccent),
+              const SizedBox(width: 6),
+              Text(gu, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const Spacer(),
+              TextButton(
+                onPressed: () {
+                  setState(() {
+                    if (allSelected) filteredDongs.forEach((dong) => selectedTags['지역']!.remove('$gu/$dong'));
+                    else filteredDongs.forEach((dong) => selectedTags['지역']!.add('$gu/$dong'));
+                  });
+                },
+                child: Text(allSelected ? '전체 해제' : '전체 선택', style: const TextStyle(fontSize: 12)),
+              ),
+            ],
+          ),
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+              child: Wrap(spacing: 8, runSpacing: 6, children: filteredDongs.map((dong) => buildTagChip('지역', '$gu/$dong', gu: gu)).toList()),
+            ),
+          ],
+        ),
+      );
+    }
+
+    Widget buildCityCard(String cityName, List<String> gus, Map<String, List<String>> dongsMap) {
+      return Card(
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: ExpansionTile(
+          initiallyExpanded: false,
+          title: Text(cityName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          children: gus.map((gu) => buildGuTile(gu, dongsMap[gu]!)).toList(),
+        ),
+      );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -363,61 +432,12 @@ class _SearchScreenState extends State<SearchScreen> {
           onChanged: (val) => setState(() => _searchQuery = val),
         ),
         const SizedBox(height: 8),
-        ...filteredGus.map((gu) {
-          final dongs = busanDongs[gu]!
-              .where((dong) => dong.toLowerCase().contains(_searchQuery.toLowerCase()))
-              .toList();
-          final allSelected = dongs.every((dong) => selectedTags['지역']!.contains('$gu/$dong'));
-
-          return Card(
-            margin: const EdgeInsets.symmetric(vertical: 4),
-            elevation: 1,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            child: ExpansionTile(
-              initiallyExpanded: false,
-              title: Row(
-                children: [
-                  Icon(Icons.location_city, size: 20, color: Colors.blueAccent),
-                  const SizedBox(width: 6),
-                  Text(gu, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: () {
-                      setState(() {
-                        if (allSelected) {
-                          dongs.forEach((dong) => selectedTags['지역']!.remove('$gu/$dong'));
-                        } else {
-                          dongs.forEach((dong) => selectedTags['지역']!.add('$gu/$dong'));
-                        }
-                      });
-                    },
-                    child: Text(allSelected ? '전체 해제' : '전체 선택', style: const TextStyle(fontSize: 12)),
-                  ),
-                ],
-              ),
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    children: dongs.map((dong) {
-                      final fullTag = '$gu/$dong';
-                      return buildTagChip('지역', fullTag, gu: gu);
-                    }).toList(),
-                  ),
-                ),
-              ],
-            ),
-          );
-        }).toList(),
+        if (filteredSeoulGus.isNotEmpty) buildCityCard('서울', filteredSeoulGus, seoulDongs),
+        if (filteredBusanGus.isNotEmpty) buildCityCard('부산', filteredBusanGus, busanDongs),
       ],
     );
   }
 
-  // ----------------------------
-  // HTTP Search
-  // ----------------------------
   Future<void> _onSearchPressed() async {
     final selectedData = getSelectedTagData();
     final url = Uri.parse('${ApiService.baseUrl}/search_routes');
@@ -426,7 +446,11 @@ class _SearchScreenState extends State<SearchScreen> {
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
-        body: json.encode({"categories": selectedData, "onlyFavorites": onlyFavorites}),
+        body: json.encode({
+          "categories": selectedData,
+          "onlyFavorites": onlyFavorites,
+          "matchType": "AND", // AND 검색임을 명시
+        }),
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200 && response.body.isNotEmpty) {
@@ -436,8 +460,8 @@ class _SearchScreenState extends State<SearchScreen> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => SearchedScreen(
-              selectedTags: getFilteredTags(),
+            builder: (_) => SearchedScreen(
+              selectedTags: selectedData,
               onlyFavorites: onlyFavorites,
               searchResults: routes,
             ),
@@ -450,9 +474,8 @@ class _SearchScreenState extends State<SearchScreen> {
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("에러 발생: $e")),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("에러 발생: $e")));
     }
   }
+
 }

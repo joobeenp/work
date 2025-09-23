@@ -6,9 +6,9 @@ import 'more_path_screen.dart';
 import 'running_start.dart';
 
 class SearchedScreen extends StatefulWidget {
-  final Map<String, List<dynamic>> selectedTags; // ID 매핑된 태그
+  final Map<String, dynamic> selectedTags; // 쉼표로 연결된 ID 문자열
   final bool onlyFavorites;
-  final List<dynamic> searchResults; // 서버에서 받은 경로 데이터
+  final List<dynamic> searchResults;
 
   const SearchedScreen({
     Key? key,
@@ -98,7 +98,7 @@ class _SearchedScreenState extends State<SearchedScreen> {
       body: Column(
         children: [
           // 선택된 태그 표시
-          if (widget.selectedTags.values.any((list) => list.isNotEmpty))
+          if (widget.selectedTags.values.any((str) => str.isNotEmpty))
             Container(
               width: double.infinity,
               color: Colors.white,
@@ -118,7 +118,7 @@ class _SearchedScreenState extends State<SearchedScreen> {
               options: MapOptions(
                 center: currentPosition != null
                     ? LatLng(currentPosition!.latitude, currentPosition!.longitude)
-                    : const LatLng(35.1796, 129.0756), // 부산 기본 좌표
+                    : const LatLng(35.1796, 129.0756),
                 zoom: 15.0,
               ),
               children: [
@@ -183,7 +183,8 @@ class _SearchedScreenState extends State<SearchedScreen> {
                             MaterialPageRoute(
                               builder: (_) => MorePathScreen(
                                 allRoutes: widget.searchResults.cast<Map<String, dynamic>>(),
-                                selectedRoute: selectedRoute,
+                                selectedTags: widget.selectedTags
+                                    .map((key, value) => MapEntry(key, value.toString())), // <- 여기서 변환
                                 onRouteSelected: (route) {
                                   setState(() {
                                     selectedRoute = route;
@@ -265,13 +266,16 @@ class _SearchedScreenState extends State<SearchedScreen> {
     final List<Widget> chips = [];
     final sortedCategories = widget.selectedTags.keys.toList()..sort();
     for (final category in sortedCategories) {
-      final tags = widget.selectedTags[category]!.toList()..sort((a, b) => a.toString().compareTo(b.toString()));
-      for (final tag in tags) {
+      final tagStr = widget.selectedTags[category]!; // dynamic 타입 처리
+      if (tagStr.isEmpty) continue;
+
+      final tagIds = tagStr.toString().split(',');
+      for (final tag in tagIds) {
         String label;
         if (category == '지역') {
-          label = tag.toString().replaceAll('/', ' - ');
+          label = tag.replaceAll('/', ' - ');
         } else {
-          label = _mapIdToLabel(category, tag);
+          label = _mapIdToLabel(category, int.tryParse(tag) ?? 0);
         }
         chips.add(
           Chip(
@@ -284,7 +288,7 @@ class _SearchedScreenState extends State<SearchedScreen> {
     return chips;
   }
 
-  String _mapIdToLabel(String category, dynamic id) {
+  String _mapIdToLabel(String category, int id) {
     if (category == '길 유형') {
       switch (id) {
         case 101: return '포장도로';

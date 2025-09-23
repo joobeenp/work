@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 
 class MorePathScreen extends StatefulWidget {
   final List<Map<String, dynamic>> allRoutes; // 전체 경로
-  final Map<String, dynamic>? selectedRoute; // 현재 선택된 경로
+  final Map<String, String>? selectedTags; // 현재 선택된 태그
   final Function(Map<String, dynamic>) onRouteSelected; // 선택 시 콜백
 
   const MorePathScreen({
     Key? key,
     required this.allRoutes,
-    required this.selectedRoute,
+    this.selectedTags,
     required this.onRouteSelected,
   }) : super(key: key);
 
@@ -31,18 +31,10 @@ class _MorePathScreenState extends State<MorePathScreen> {
   @override
   void initState() {
     super.initState();
-    _filterRoutes();
-  }
-
-  /// 현재 선택된 경로 제외
-  void _filterRoutes() {
-    routesToShow = widget.allRoutes
-        .where((route) => route != widget.selectedRoute)
-        .toList();
+    routesToShow = widget.allRoutes.toList();
     _sortRoutes();
   }
 
-  /// 선택된 알고리즘에 따라 정렬
   void _sortRoutes() {
     setState(() {
       switch (_selectedAlgorithm) {
@@ -112,16 +104,14 @@ class _MorePathScreenState extends State<MorePathScreen> {
     );
   }
 
-  /// 경로 카드 UI
   Widget _buildRouteCard(BuildContext context, Map<String, dynamic> route) {
     final routeName = route['route_name'] ?? '이름 없음';
     final creatorName = route['nickname'] ?? '알 수 없음';
     final favoriteCount = route['favoriteCount'] ?? 0;
     final rating = route['rating'] ?? 0.0;
 
-    // 태그/카테고리 표시 (ID → 라벨)
-    final selectedTags = route['selectedTags'] ?? {};
-    final tagWidgets = _buildTagWidgets(selectedTags);
+    // selectedTags를 기반으로 태그 표시
+    final tagWidgets = _buildTagWidgets(route['selectedTags'] ?? {});
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
@@ -217,15 +207,16 @@ class _MorePathScreenState extends State<MorePathScreen> {
     );
   }
 
-  /// 선택된 태그 ID → 라벨 변환 후 위젯 생성
-  List<Widget> _buildTagWidgets(Map<String, dynamic> selectedTags) {
+  List<Widget> _buildTagWidgets(Map<String, String> selectedTags) {
     final List<Widget> chips = [];
-    selectedTags.forEach((category, tags) {
-      final tagList = (tags as List).map((e) => _mapIdToLabel(category, e)).toList();
+    selectedTags.forEach((category, value) {
+      if (value.isEmpty) return;
+      final tagList = value.split(',');
       for (final tag in tagList) {
         chips.add(
           Chip(
-            label: Text(tag, style: const TextStyle(fontSize: 12, color: Colors.black87)),
+            label: Text(_mapIdToLabel(category, tag),
+                style: const TextStyle(fontSize: 12, color: Colors.black87)),
             backgroundColor: Colors.grey.shade200,
           ),
         );
@@ -234,28 +225,39 @@ class _MorePathScreenState extends State<MorePathScreen> {
     return chips;
   }
 
-  /// ID → 라벨 변환
-  String _mapIdToLabel(String category, dynamic id) {
+  String _mapIdToLabel(String category, String idStr) {
+    final id = int.tryParse(idStr);
     if (category == '길 유형') {
       switch (id) {
-        case 101: return '포장도로';
-        case 102: return '비포장도로';
-        case 103: return '등산로';
-        case 104: return '짧은 산책로';
-        case 105: return '긴 산책로';
-        case 106: return '운동용 산책로';
+        case 101:
+          return '포장도로';
+        case 102:
+          return '비포장도로';
+        case 103:
+          return '등산로';
+        case 104:
+          return '짧은 산책로';
+        case 105:
+          return '긴 산책로';
+        case 106:
+          return '운동용 산책로';
       }
     } else if (category == '이동수단') {
       switch (id) {
-        case 201: return '걷기';
-        case 202: return '뜀걸음';
-        case 203: return '자전거';
-        case 204: return '휠체어';
-        case 205: return '유모차';
+        case 201:
+          return '걷기';
+        case 202:
+          return '뜀걸음';
+        case 203:
+          return '자전거';
+        case 204:
+          return '휠체어';
+        case 205:
+          return '유모차';
       }
     } else if (category == '지역') {
-      return id.toString().replaceAll('/', ' - ');
+      return idStr.replaceAll('/', ' - ');
     }
-    return id.toString();
+    return idStr;
   }
 }
