@@ -5,9 +5,6 @@ import 'package:geolocator/geolocator.dart';
 import 'more_path_screen.dart';
 import 'running_start.dart';
 
-// 🔹 SearchScreen에서 넘겨받는 selectedTags는 이미 ID 매핑된 상태라고 가정
-// 예: { "길 유형": [101, 102], "이동수단": [201], "지역": ["해운대구/우동"] }
-
 class SearchedScreen extends StatefulWidget {
   final Map<String, List<dynamic>> selectedTags; // ID 매핑된 태그
   final bool onlyFavorites;
@@ -121,7 +118,7 @@ class _SearchedScreenState extends State<SearchedScreen> {
               options: MapOptions(
                 center: currentPosition != null
                     ? LatLng(currentPosition!.latitude, currentPosition!.longitude)
-                    : const LatLng(37.5665, 126.9780),
+                    : const LatLng(35.1796, 129.0756), // 부산 기본 좌표
                 zoom: 15.0,
               ),
               children: [
@@ -274,7 +271,6 @@ class _SearchedScreenState extends State<SearchedScreen> {
         if (category == '지역') {
           label = tag.toString().replaceAll('/', ' - ');
         } else {
-          // 숫자 ID를 사람이 읽을 수 있는 텍스트로 변환
           label = _mapIdToLabel(category, tag);
         }
         chips.add(
@@ -291,20 +287,20 @@ class _SearchedScreenState extends State<SearchedScreen> {
   String _mapIdToLabel(String category, dynamic id) {
     if (category == '길 유형') {
       switch (id) {
-        case 101: return '산책로';
-        case 102: return '자전거도로';
+        case 101: return '포장도로';
+        case 102: return '비포장도로';
         case 103: return '등산로';
-        case 104: return '도심 산책';
-        case 105: return '해변 산책';
-        case 106: return '호수/공원';
+        case 104: return '짧은 산책로';
+        case 105: return '긴 산책로';
+        case 106: return '운동용 산책로';
       }
     } else if (category == '이동수단') {
       switch (id) {
-        case 201: return '도보';
-        case 202: return '자전거';
-        case 203: return '킥보드';
-        case 204: return '런닝';
-        case 205: return '기타';
+        case 201: return '걷기';
+        case 202: return '뜀걸음';
+        case 203: return '자전거';
+        case 204: return '휠체어';
+        case 205: return '유모차';
       }
     }
     return id.toString();
@@ -361,7 +357,7 @@ class _SearchedScreenState extends State<SearchedScreen> {
                 }
                     : null,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF3CAEA3),
+                  backgroundColor: route != null ? const Color(0xFF3CAEA3) : Colors.grey.shade400,
                   foregroundColor: Colors.white,
                 ),
                 child: const Text('산책 시작'),

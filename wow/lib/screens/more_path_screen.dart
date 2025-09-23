@@ -47,7 +47,6 @@ class _MorePathScreenState extends State<MorePathScreen> {
     setState(() {
       switch (_selectedAlgorithm) {
         case '연관성':
-        // 연관성: route_name 기준 (간단 예시, 필요시 검색 키워드 기반 추천 로직 추가 가능)
           routesToShow.sort((a, b) =>
               (a['route_name'] ?? '').compareTo(b['route_name'] ?? ''));
           break;
@@ -120,85 +119,143 @@ class _MorePathScreenState extends State<MorePathScreen> {
     final favoriteCount = route['favoriteCount'] ?? 0;
     final rating = route['rating'] ?? 0.0;
 
+    // 태그/카테고리 표시 (ID → 라벨)
+    final selectedTags = route['selectedTags'] ?? {};
+    final tagWidgets = _buildTagWidgets(selectedTags);
+
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       elevation: 4,
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: Row(
+        child: Column(
           children: [
-            // 이미지 플레이스홀더
-            Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              margin: const EdgeInsets.only(right: 12),
-              child: const Icon(Icons.route, color: Colors.white70),
-            ),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    routeName,
-                    style: const TextStyle(
-                      color: Color(0xFF2D2D2D),
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
+            Row(
+              children: [
+                // 이미지 플레이스홀더
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      const Text('생성자: ',
-                          style: TextStyle(color: Colors.grey)),
-                      Text(creatorName,
-                          style: const TextStyle(color: Colors.black)),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      const Icon(Icons.favorite,
-                          color: Colors.red, size: 18),
-                      const SizedBox(width: 4),
-                      Text('$favoriteCount',
-                          style: const TextStyle(color: Colors.red)),
-                      const SizedBox(width: 12),
-                      const Icon(Icons.star,
-                          color: Colors.amber, size: 18),
-                      const SizedBox(width: 4),
-                      Text(rating.toStringAsFixed(1),
-                          style: const TextStyle(color: Colors.amber)),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                widget.onRouteSelected(route);
-                Navigator.pop(context);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF3CAEA3),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  margin: const EdgeInsets.only(right: 12),
+                  child: const Icon(Icons.route, color: Colors.white70),
                 ),
-                padding:
-                const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-              ),
-              child: const Text('선택',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        routeName,
+                        style: const TextStyle(
+                          color: Color(0xFF2D2D2D),
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const Text('생성자: ',
+                              style: TextStyle(color: Colors.grey)),
+                          Text(creatorName,
+                              style: const TextStyle(color: Colors.black)),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const Icon(Icons.favorite,
+                              color: Colors.red, size: 18),
+                          const SizedBox(width: 4),
+                          Text('$favoriteCount',
+                              style: const TextStyle(color: Colors.red)),
+                          const SizedBox(width: 12),
+                          const Icon(Icons.star,
+                              color: Colors.amber, size: 18),
+                          const SizedBox(width: 4),
+                          Text(rating.toStringAsFixed(1),
+                              style: const TextStyle(color: Colors.amber)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    widget.onRouteSelected(route);
+                    Navigator.pop(context);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF3CAEA3),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  ),
+                  child: const Text('선택',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
             ),
+            if (tagWidgets.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: tagWidgets,
+              ),
+            ],
           ],
         ),
       ),
     );
+  }
+
+  /// 선택된 태그 ID → 라벨 변환 후 위젯 생성
+  List<Widget> _buildTagWidgets(Map<String, dynamic> selectedTags) {
+    final List<Widget> chips = [];
+    selectedTags.forEach((category, tags) {
+      final tagList = (tags as List).map((e) => _mapIdToLabel(category, e)).toList();
+      for (final tag in tagList) {
+        chips.add(
+          Chip(
+            label: Text(tag, style: const TextStyle(fontSize: 12, color: Colors.black87)),
+            backgroundColor: Colors.grey.shade200,
+          ),
+        );
+      }
+    });
+    return chips;
+  }
+
+  /// ID → 라벨 변환
+  String _mapIdToLabel(String category, dynamic id) {
+    if (category == '길 유형') {
+      switch (id) {
+        case 101: return '포장도로';
+        case 102: return '비포장도로';
+        case 103: return '등산로';
+        case 104: return '짧은 산책로';
+        case 105: return '긴 산책로';
+        case 106: return '운동용 산책로';
+      }
+    } else if (category == '이동수단') {
+      switch (id) {
+        case 201: return '걷기';
+        case 202: return '뜀걸음';
+        case 203: return '자전거';
+        case 204: return '휠체어';
+        case 205: return '유모차';
+      }
+    } else if (category == '지역') {
+      return id.toString().replaceAll('/', ' - ');
+    }
+    return id.toString();
   }
 }

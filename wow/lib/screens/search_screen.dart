@@ -4,6 +4,8 @@ import '../services/api_service.dart';
 import 'dart:convert';
 import 'searched_screen.dart';
 
+enum CategoryType { region, roadType, transport }
+
 class SearchScreen extends StatefulWidget {
   const SearchScreen({Key? key}) : super(key: key);
 
@@ -17,18 +19,20 @@ class _SearchScreenState extends State<SearchScreen> {
   String _searchQuery = '';
   String? _currentGu;
 
-  // 태그 데이터
-  final Map<String, List<String>> tagData = {
+  // ----------------------------
+  // Constants
+  // ----------------------------
+  static const Map<String, List<String>> tagData = {
     '길 유형': ['포장도로', '비포장도로', '등산로', '짧은 산책로', '긴 산책로', '운동용 산책로'],
     '이동수단': ['걷기', '뜀걸음', '자전거', '휠체어', '유모차'],
   };
 
-  final List<String> _busanGus = const [
+  static const List<String> busanGus = [
     '중구','서구','동구','영도구','부산진구','동래구','남구','북구',
     '해운대구','사하구','금정구','강서구','연제구','수영구','사상구','기장군',
   ];
 
-  final Map<String, List<String>> _busanDongs = const {
+  static const Map<String, List<String>> busanDongs = {
     '중구': ['광복동','남포동','대청동','동광동','보수동','부평동'],
     '서구': ['동대신동','서대신동','암남동','아미동','토성동'],
     '동구': ['초량동','수정동','좌천동','범일동'],
@@ -54,7 +58,7 @@ class _SearchScreenState extends State<SearchScreen> {
     '이동수단': {},
   };
 
-  // 매핑: 지역 → ID
+  // 매핑: region / roadType / transport → ID
   final Map<String, int> regionToId = {
     '중구/광복동': 1, '중구/남포동': 2, '중구/대청동': 3, '중구/동광동': 4, '중구/보수동': 5, '중구/부평동': 6,
     '서구/동대신동': 7, '서구/서대신동': 8, '서구/암남동': 9, '서구/아미동': 10, '서구/토성동': 11,
@@ -74,25 +78,17 @@ class _SearchScreenState extends State<SearchScreen> {
     '기장군/기장읍': 70, '기장군/정관읍': 71, '기장군/일광읍': 72, '기장군/철마면': 73, '기장군/장안읍': 74,
   };
 
-  // 매핑: 길 유형 → ID
   final Map<String, int> roadTypeToId = {
-    '포장도로': 101,
-    '비포장도로': 102,
-    '등산로': 103,
-    '짧은 산책로': 104,
-    '긴 산책로': 105,
-    '운동용 산책로': 106,
+    '포장도로': 101, '비포장도로': 102, '등산로': 103, '짧은 산책로': 104, '긴 산책로': 105, '운동용 산책로': 106,
   };
 
-  // 매핑: 이동수단 → ID
   final Map<String, int> transportToId = {
-    '걷기': 201,
-    '뜀걸음': 202,
-    '자전거': 203,
-    '휠체어': 204,
-    '유모차': 205,
+    '걷기': 201, '뜀걸음': 202, '자전거': 203, '휠체어': 204, '유모차': 205,
   };
 
+  // ----------------------------
+  // Helper Methods
+  // ----------------------------
   void toggleDropdown(String name) {
     setState(() {
       if (activeDropdown == name) {
@@ -135,52 +131,66 @@ class _SearchScreenState extends State<SearchScreen> {
     });
   }
 
-  // 지역/길유형/이동수단 모두 ID 매핑
   Map<String, dynamic> getSelectedTagData() {
     final Map<String, dynamic> result = {};
     selectedTags.forEach((category, tags) {
       if (category == '지역') {
-        result[category] = tags.map((tag) => regionToId[tag]!).toList();
+        result[category] = tags.map((tag) => regionToId[tag]).whereType<int>().toList();
       } else if (category == '길 유형') {
-        result[category] = tags.map((tag) => roadTypeToId[tag]!).toList();
+        result[category] = tags.map((tag) => roadTypeToId[tag]).whereType<int>().toList();
       } else if (category == '이동수단') {
-        result[category] = tags.map((tag) => transportToId[tag]!).toList();
+        result[category] = tags.map((tag) => transportToId[tag]).whereType<int>().toList();
       }
     });
     return result;
+  }
+
+  // ----------------------------
+  // Tag Chip Builder (통합)
+  // ----------------------------
+  Widget buildTagChip(String category, String tag, {String? gu}) {
+    final isSelected = selectedTags[category]!.contains(tag);
+    String labelText;
+
+    if (category == '지역' && gu != null) {
+      labelText = tag.split('/')[1]; // 동 이름 표시
+    } else {
+      labelText = tag;
+    }
+
+    return FilterChip(
+      label: Text(labelText),
+      selected: isSelected,
+      onSelected: (_) {
+        if (category == '지역' && gu != null) {
+          toggleRegion(gu, tag.split('/')[1]);
+        } else {
+          toggleTag(category, tag);
+        }
+      },
+      backgroundColor: Colors.grey.shade200,
+      selectedColor: Colors.blueAccent.shade100,
+      showCheckmark: false,
+      labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black87),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+    );
   }
 
   List<Widget> buildSelectedTagChips() {
     final List<Widget> chips = [];
     selectedTags.forEach((category, tags) {
       for (final tag in tags) {
-        final label = category == '지역' ? tag.replaceAll('/', ' - ') : tag;
-        chips.add(FilterChip(
-          label: Text(label),
-          selected: true,
-          onSelected: (_) {
-            if (category == '지역' && tag.contains('/')) {
-              final sp = tag.split('/');
-              toggleRegion(sp[0], sp[1]);
-            } else {
-              toggleTag(category, tag);
-            }
-          },
-          backgroundColor: Colors.grey.shade200,
-          selectedColor: Colors.blueAccent.shade100,
-          showCheckmark: false,
-          labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black87),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        ));
+        chips.add(buildTagChip(category, tag, gu: category == '지역' ? tag.split('/')[0] : null));
       }
     });
     return chips;
   }
 
+  // ----------------------------
+  // UI Builders
+  // ----------------------------
   @override
   Widget build(BuildContext context) {
-    final filteredTags = getFilteredTags();
-
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
@@ -277,46 +287,7 @@ class _SearchScreenState extends State<SearchScreen> {
                   backgroundColor: Colors.blueAccent,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                onPressed: () async {
-                  final selectedData = getSelectedTagData();
-                  final url = Uri.parse('${ApiService.baseUrl}/search_routes');
-
-                  try {
-                    final response = await http.post(
-                      url,
-                      headers: {'Content-Type': 'application/json'},
-                      body: json.encode({
-                        "categories": selectedData,
-                        "onlyFavorites": onlyFavorites,
-                      }),
-                    ).timeout(const Duration(seconds: 10));
-
-                    if (response.statusCode == 200) {
-                      final responseData = json.decode(response.body);
-                      final routes = responseData['routes'] as List<dynamic>;
-
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => SearchedScreen(
-                            selectedTags: filteredTags,
-                            onlyFavorites: onlyFavorites,
-                            searchResults: routes,
-                          ),
-                        ),
-                      );
-                    } else {
-                      final error = json.decode(response.body);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(error['message'] ?? "검색 실패")),
-                      );
-                    }
-                  } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text("에러 발생: $e")),
-                    );
-                  }
-                },
+                onPressed: _onSearchPressed,
                 child: const Text('검색하기', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
             ),
@@ -365,9 +336,19 @@ class _SearchScreenState extends State<SearchScreen> {
     }
   }
 
+  Widget buildSimpleTagGrid(String category) {
+    final tags = tagData[category]!;
+    return Wrap(
+      spacing: 8,
+      runSpacing: 6,
+      children: tags.map((tag) => buildTagChip(category, tag)).toList(),
+    );
+  }
+
   Widget buildRegionDropdown() {
-    final filteredGus = _busanGus.where((gu) {
-      return gu.contains(_searchQuery) || _busanDongs[gu]!.any((dong) => dong.contains(_searchQuery));
+    final filteredGus = busanGus.where((gu) {
+      return gu.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          busanDongs[gu]!.any((dong) => dong.toLowerCase().contains(_searchQuery.toLowerCase()));
     }).toList();
 
     return Column(
@@ -383,71 +364,95 @@ class _SearchScreenState extends State<SearchScreen> {
         ),
         const SizedBox(height: 8),
         ...filteredGus.map((gu) {
-          final dongs = _busanDongs[gu]!.where((dong) => dong.contains(_searchQuery)).toList();
+          final dongs = busanDongs[gu]!
+              .where((dong) => dong.toLowerCase().contains(_searchQuery.toLowerCase()))
+              .toList();
           final allSelected = dongs.every((dong) => selectedTags['지역']!.contains('$gu/$dong'));
 
-          return ExpansionTile(
-            title: Row(
+          return Card(
+            margin: const EdgeInsets.symmetric(vertical: 4),
+            elevation: 1,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            child: ExpansionTile(
+              initiallyExpanded: false,
+              title: Row(
+                children: [
+                  Icon(Icons.location_city, size: 20, color: Colors.blueAccent),
+                  const SizedBox(width: 6),
+                  Text(gu, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () {
+                      setState(() {
+                        if (allSelected) {
+                          dongs.forEach((dong) => selectedTags['지역']!.remove('$gu/$dong'));
+                        } else {
+                          dongs.forEach((dong) => selectedTags['지역']!.add('$gu/$dong'));
+                        }
+                      });
+                    },
+                    child: Text(allSelected ? '전체 해제' : '전체 선택', style: const TextStyle(fontSize: 12)),
+                  ),
+                ],
+              ),
               children: [
-                Text(gu, style: const TextStyle(fontWeight: FontWeight.bold)),
-                const Spacer(),
-                TextButton(
-                  onPressed: () {
-                    setState(() {
-                      if (allSelected) {
-                        dongs.forEach((dong) => selectedTags['지역']!.remove('$gu/$dong'));
-                      } else {
-                        dongs.forEach((dong) => selectedTags['지역']!.add('$gu/$dong'));
-                      }
-                    });
-                  },
-                  child: Text(allSelected ? '전체 해제' : '전체 선택', style: const TextStyle(fontSize: 12)),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: dongs.map((dong) {
+                      final fullTag = '$gu/$dong';
+                      return buildTagChip('지역', fullTag, gu: gu);
+                    }).toList(),
+                  ),
                 ),
               ],
             ),
-            children: [
-              Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                children: dongs.map((dong) {
-                  final key = '$gu/$dong';
-                  return FilterChip(
-                    label: Text(dong),
-                    selected: selectedTags['지역']!.contains(key),
-                    onSelected: (_) => toggleRegion(gu, dong),
-                    backgroundColor: Colors.grey.shade200,
-                    selectedColor: Colors.blueAccent.shade200,
-                    showCheckmark: false,
-                    labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  );
-                }).toList(),
-              ),
-            ],
           );
         }).toList(),
       ],
     );
   }
 
-  Widget buildSimpleTagGrid(String category) {
-    final tags = tagData[category]!;
-    return Wrap(
-      spacing: 8,
-      runSpacing: 6,
-      children: tags.map((tag) {
-        final isSelected = selectedTags[category]!.contains(tag);
-        return FilterChip(
-          label: Text(tag),
-          selected: isSelected,
-          onSelected: (_) => toggleTag(category, tag),
-          backgroundColor: Colors.grey.shade200,
-          selectedColor: Colors.blueAccent.shade100,
-          showCheckmark: false,
-          labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black87),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+  // ----------------------------
+  // HTTP Search
+  // ----------------------------
+  Future<void> _onSearchPressed() async {
+    final selectedData = getSelectedTagData();
+    final url = Uri.parse('${ApiService.baseUrl}/search_routes');
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({"categories": selectedData, "onlyFavorites": onlyFavorites}),
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200 && response.body.isNotEmpty) {
+        final responseData = json.decode(response.body);
+        final routes = responseData['routes'] as List<dynamic>;
+
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => SearchedScreen(
+              selectedTags: getFilteredTags(),
+              onlyFavorites: onlyFavorites,
+              searchResults: routes,
+            ),
+          ),
         );
-      }).toList(),
-    );
+      } else {
+        final error = response.body.isNotEmpty ? json.decode(response.body) : {};
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error['message'] ?? "검색 실패")),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("에러 발생: $e")),
+      );
+    }
   }
 }
