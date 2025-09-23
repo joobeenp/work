@@ -22,6 +22,7 @@ class _SearchScreenState extends State<SearchScreen> {
   String? _currentGu;
   String currentRegionLabel = '[현재 지역]';
 
+  // --- 필터 데이터 ---
   static const Map<String, List<String>> tagData = {
     '길 유형': ['포장도로', '비포장도로', '등산로', '짧은 산책로', '긴 산책로', '운동용 산책로'],
     '이동수단': ['걷기', '뜀걸음', '자전거', '휠체어', '유모차'],
@@ -192,7 +193,6 @@ class _SearchScreenState extends State<SearchScreen> {
     return result;
   }
 
-
   Widget buildTagChip(String category, String tag, {String? gu}) {
     final isSelected = selectedTags[category]!.contains(tag);
     final labelText = (category == '지역' && gu != null) ? tag.split('/')[1] : tag;
@@ -212,6 +212,60 @@ class _SearchScreenState extends State<SearchScreen> {
   List<Widget> buildSelectedTagChips() => selectedTags.entries.expand((e) =>
       e.value.map((t) => buildTagChip(e.key, t, gu: e.key == '지역' ? t.split('/')[0] : null))
   ).toList();
+
+  // --- 검색 버튼 클릭 ---
+  Future<void> _onSearchPressed() async {
+    final selectedData = getSelectedTagData();
+    final url = Uri.parse('${ApiService.baseUrl}/search_routes');
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          "categories": selectedData,
+          "onlyFavorites": onlyFavorites,
+          "matchType": "AND",
+        }),
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200 && response.body.isNotEmpty) {
+        final responseData = json.decode(response.body);
+        final routes = responseData['routes'] as List<dynamic>;
+
+        // --- SearchedScreen으로 route_path 포함해서 전달 ---
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => SearchedScreen(
+              selectedTags: getSelectedTagData(),
+              onlyFavorites: onlyFavorites,
+              searchResults: routes.map((r) {
+                return {
+                  "id": r['id'],
+                  "route_name": r['route_name'],
+                  "nickname": r['nickname'],
+                  "region_id": r['region_id'],
+                  "road_type_id": r['road_type_id'],
+                  "transport_id": r['transport_id'],
+                  "favoriteCount": r['favorite_count'], // 즐겨찾기 수
+                  "rating": r['rating'],
+                  "route_path": r['route_path'], // 좌표 배열 포함
+                };
+              }).toList(),
+            ),
+          ),
+        );
+      } else {
+        final error = response.body.isNotEmpty ? json.decode(response.body) : {};
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error['message'] ?? "검색 실패")),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("에러 발생: $e")));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -437,45 +491,4 @@ class _SearchScreenState extends State<SearchScreen> {
       ],
     );
   }
-
-  Future<void> _onSearchPressed() async {
-    final selectedData = getSelectedTagData();
-    final url = Uri.parse('${ApiService.baseUrl}/search_routes');
-
-    try {
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          "categories": selectedData,
-          "onlyFavorites": onlyFavorites,
-          "matchType": "AND", // 서버에서 AND 조건 처리
-        }),
-      ).timeout(const Duration(seconds: 10));
-
-      if (response.statusCode == 200 && response.body.isNotEmpty) {
-        final responseData = json.decode(response.body);
-        final routes = responseData['routes'] as List<dynamic>;
-
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => SearchedScreen(
-              selectedTags: getSelectedTagData(), // ID 리스트만 전달
-              onlyFavorites: onlyFavorites,
-              searchResults: routes,
-            ),
-          ),
-        );
-      } else {
-        final error = response.body.isNotEmpty ? json.decode(response.body) : {};
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error['message'] ?? "검색 실패")),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("에러 발생: $e")));
-    }
-  }
-
 }

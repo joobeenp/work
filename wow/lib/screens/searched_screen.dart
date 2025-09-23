@@ -6,7 +6,7 @@ import 'more_path_screen.dart';
 import 'running_start.dart';
 
 class SearchedScreen extends StatefulWidget {
-  final Map<String, dynamic> selectedTags; // { "지역": [1,2], "길 유형": [101], "이동수단": [201] }
+  final Map<String, dynamic> selectedTags;
   final bool onlyFavorites;
   final List<dynamic> searchResults;
 
@@ -94,7 +94,7 @@ class _SearchedScreenState extends State<SearchedScreen> {
       points.add(LatLng(currentPosition!.latitude, currentPosition!.longitude));
     }
     if (selectedRoute != null) {
-      points.addAll(_convertToLatLngList(selectedRoute!['polyline']));
+      points.addAll(_convertToLatLngList(selectedRoute!['route_path']));
     }
 
     if (points.isNotEmpty) {
@@ -158,7 +158,7 @@ class _SearchedScreenState extends State<SearchedScreen> {
                   PolylineLayer(
                     polylines: [
                       Polyline(
-                        points: _convertToLatLngList(selectedRoute!['polyline']),
+                        points: _convertToLatLngList(selectedRoute!['route_path']),
                         color: Colors.blueAccent.shade400,
                         strokeWidth: 4,
                       ),
@@ -187,7 +187,7 @@ class _SearchedScreenState extends State<SearchedScreen> {
           ),
           const SizedBox(height: 8),
 
-          // 선택된 경로 카드
+          // 선택된 경로 카드 (큰 카드 형태)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: _buildSelectedRouteCard(selectedRoute),
@@ -239,12 +239,6 @@ class _SearchedScreenState extends State<SearchedScreen> {
                 }
 
                 final route = routesToShow[index];
-                final routeName = route['route_name'] ?? '이름 없음';
-                final creatorName = route['nickname'] ?? '알 수 없음';
-                final favoriteCount = route['favoriteCount'] ?? 0;
-                final rating = route['rating'] ?? 0.0;
-                final isSelected = selectedRoute == route;
-
                 return GestureDetector(
                   onTap: () {
                     setState(() {
@@ -252,39 +246,7 @@ class _SearchedScreenState extends State<SearchedScreen> {
                     });
                     _fitMapBounds();
                   },
-                  child: Card(
-                    color: isSelected ? Colors.blue[50] : Colors.white,
-                    elevation: isSelected ? 4 : 1,
-                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(routeName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                          const SizedBox(height: 4),
-                          Text('생성자: $creatorName'),
-                          const SizedBox(height: 2),
-                          Text('지역: ${idToRegion[route['region_id']] ?? '-'}'),
-                          Text('길 유형: ${idToRoadType[route['road_type_id']] ?? '-'}'),
-                          Text('이동수단: ${idToTransport[route['transport_id']] ?? '-'}'),
-                          const SizedBox(height: 6),
-                          Row(
-                            children: [
-                              const Icon(Icons.favorite, color: Colors.red, size: 16),
-                              const SizedBox(width: 4),
-                              Text('$favoriteCount'),
-                              const SizedBox(width: 12),
-                              const Icon(Icons.star, color: Colors.amber, size: 16),
-                              const SizedBox(width: 4),
-                              Text(rating.toStringAsFixed(1)),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                  child: _buildListRouteCard(route, isSelected: selectedRoute == route),
                 );
               },
             ),
@@ -327,64 +289,167 @@ class _SearchedScreenState extends State<SearchedScreen> {
   }
 
   Widget _buildSelectedRouteCard(Map<String, dynamic>? route) {
-    final routeName = route?['route_name'] ?? '경로를 선택해주세요.';
-    final creatorName = route?['nickname'] ?? '-';
-    final favoriteCount = route?['favoriteCount'] ?? 0;
-    final rating = route?['rating'] ?? 0.0;
+    if (route == null) {
+      return const Card(
+        margin: EdgeInsets.symmetric(horizontal: 16),
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Text("경로를 선택해주세요."),
+        ),
+      );
+    }
+
+    final routeName = route['route_name'] ?? '-';
+    final creatorName = route['nickname'] ?? '-';
+    final favoriteCount = route['favorite_count'] ?? 0;
+
+    final regionLabel =
+        idToRegion[int.tryParse(route['region_id']?.toString() ?? '') ?? 0] ?? '-';
+    final roadTypeLabel =
+        idToRoadType[int.tryParse(route['road_type_id']?.toString() ?? '') ?? 0] ?? '-';
+    final transportLabel =
+        idToTransport[int.tryParse(route['transport_id']?.toString() ?? '') ?? 0] ?? '-';
 
     return Card(
-      color: Colors.white,
+      margin: const EdgeInsets.symmetric(horizontal: 0),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(routeName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 4),
-            Text('생성자: $creatorName'),
-            const SizedBox(height: 4),
-            Text('지역: ${idToRegion[route?['region_id']] ?? '-'}'),
-            Text('길 유형: ${idToRoadType[route?['road_type_id']] ?? '-'}'),
-            Text('이동수단: ${idToTransport[route?['transport_id']] ?? '-'}'),
-            const SizedBox(height: 6),
-            Row(
+      elevation: 4,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            height: 200,
+            child: route['route_path'] != null
+                ? FlutterMap(
+              options: MapOptions(
+                interactiveFlags: InteractiveFlag.none,
+                bounds: LatLngBounds.fromPoints(_convertToLatLngList(route['route_path'])),
+                boundsOptions: const FitBoundsOptions(padding: EdgeInsets.all(8)),
+              ),
               children: [
-                const Icon(Icons.favorite, color: Colors.red, size: 18),
-                const SizedBox(width: 4),
-                Text('$favoriteCount'),
-                const SizedBox(width: 12),
-                const Icon(Icons.star, color: Colors.amber, size: 18),
-                const SizedBox(width: 4),
-                Text(rating.toStringAsFixed(1)),
+                TileLayer(
+                  urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  subdomains: const ['a', 'b', 'c'],
+                ),
+                PolylineLayer(
+                  polylines: [
+                    Polyline(
+                      points: _convertToLatLngList(route['route_path']),
+                      color: Colors.blue,
+                      strokeWidth: 4,
+                    ),
+                  ],
+                ),
+              ],
+            )
+                : Container(
+              color: Colors.grey.shade300,
+              child: const Center(child: Text("경로 스냅샷 없음")),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(routeName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                Text('생성자: $creatorName'),
+                Text('지역: $regionLabel'),
+                Text('길 유형: $roadTypeLabel'),
+                Text('이동수단: $transportLabel'),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    const Icon(Icons.star, color: Colors.amber, size: 18),
+                    const SizedBox(width: 4),
+                    Text('$favoriteCount'),
+                  ],
+                ),
               ],
             ),
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: route != null
-                    ? () {
-                  final polylinePoints = _convertToLatLngList(route['polyline']);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => RunningStartScreen(
-                        userId: creatorName,
-                        routeName: routeName,
-                        polylinePoints: polylinePoints,
-                        intervalMinutes: 0,
-                        intervalSeconds: 0,
-                      ),
-                    ),
-                  );
-                }
-                    : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: route != null ? const Color(0xFF3CAEA3) : Colors.grey.shade400,
-                  foregroundColor: Colors.white,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildListRouteCard(Map<String, dynamic> route, {bool isSelected = false}) {
+    final routeName = route['route_name'] ?? '이름 없음';
+    final creatorName = route['nickname'] ?? '알 수 없음';
+    final favoriteCount = route['favorite_count'] ?? 0;
+
+    final regionLabel =
+        idToRegion[int.tryParse(route['region_id']?.toString() ?? '') ?? 0] ?? '-';
+    final roadTypeLabel =
+        idToRoadType[int.tryParse(route['road_type_id']?.toString() ?? '') ?? 0] ?? '-';
+    final transportLabel =
+        idToTransport[int.tryParse(route['transport_id']?.toString() ?? '') ?? 0] ?? '-';
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      color: isSelected ? Colors.blue[50] : Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: isSelected ? 4 : 2,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 지도 스냅샷
+            Container(
+              width: 120,
+              height: 120,
+              margin: const EdgeInsets.only(right: 12),
+              child: route['route_path'] != null
+                  ? FlutterMap(
+                options: MapOptions(
+                  interactiveFlags: InteractiveFlag.none,
+                  bounds: LatLngBounds.fromPoints(_convertToLatLngList(route['route_path'])),
+                  boundsOptions: const FitBoundsOptions(padding: EdgeInsets.all(4)),
                 ),
-                child: const Text('산책 시작'),
+                children: [
+                  TileLayer(
+                    urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    subdomains: const ['a', 'b', 'c'],
+                  ),
+                  PolylineLayer(
+                    polylines: [
+                      Polyline(
+                        points: _convertToLatLngList(route['route_path']),
+                        color: Colors.blue,
+                        strokeWidth: 3,
+                      ),
+                    ],
+                  ),
+                ],
+              )
+                  : Container(
+                color: Colors.grey.shade300,
+                child: const Center(child: Text("없음")),
+              ),
+            ),
+            // 텍스트 정보
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(routeName,
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  Text('생성자: $creatorName'),
+                  Text('지역: $regionLabel'),
+                  Text('길 유형: $roadTypeLabel'),
+                  Text('이동수단: $transportLabel'),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      const Icon(Icons.star, color: Colors.amber, size: 16),
+                      const SizedBox(width: 4),
+                      Text('$favoriteCount'),
+                    ],
+                  ),
+                ],
               ),
             ),
           ],
@@ -393,9 +458,9 @@ class _SearchedScreenState extends State<SearchedScreen> {
     );
   }
 
-  List<LatLng> _convertToLatLngList(List<dynamic>? polyline) {
-    if (polyline == null) return [];
-    return polyline.map<LatLng>((p) {
+  List<LatLng> _convertToLatLngList(List<dynamic>? path) {
+    if (path == null) return [];
+    return path.map<LatLng>((p) {
       if (p is List && p.length >= 2) return LatLng(p[0], p[1]);
       return const LatLng(0, 0);
     }).toList();
