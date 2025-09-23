@@ -25,12 +25,12 @@ class Route(db.Model):
     user_id = db.Column(db.String(80), nullable=False)
     route_name = db.Column(db.String(120), nullable=False)
     route_path = db.Column(db.Text)          # JSON 문자열
-    category = db.Column(db.Integer)         # ✅ INT (DB와 일치)
+    category = db.Column(db.String(20))      # VARCHAR로 변경
 
 class FavoriteRoute(db.Model):
     __tablename__ = 'favorite_route'
     id = db.Column(db.BigInteger, primary_key=True)
-    user_id = db.Column(db.String(80), db.ForeignKey('user.user_id'), nullable=False)  # ✅ FK 일치
+    user_id = db.Column(db.String(80), db.ForeignKey('user.user_id'), nullable=False)
     route_id = db.Column(db.Integer, db.ForeignKey('route.id'), nullable=False)
 
 # ======================= Utils =======================
@@ -145,7 +145,7 @@ def add_route():
     user_id = data.get("user_id")
     route_name = data.get("route_name")
     route_path = data.get("route_path")
-    category = data.get("category")  # 이제 문자열로 저장 가능
+    category = data.get("category")  # 문자열로 처리
 
     if not all([user_id, route_name, route_path]):
         return jsonify({"message": "경로명, 좌표, 사용자 ID는 필수입니다."}), 400
@@ -155,7 +155,6 @@ def add_route():
         if not isinstance(route_path_list, list):
             raise TypeError("route_path는 리스트 형태여야 합니다.")
 
-        # category는 문자열로 저장
         if category is not None and not isinstance(category, str):
             category = str(category)
 
@@ -181,51 +180,74 @@ def add_route():
         print(f"[add_route] 서버 오류: {e}")
         return jsonify({"message": f"경로 저장 실패: 서버 내부 오류. ({str(e)})"}), 500
 
-# ======================= 검색 =======================
+@app.route('/recent_route', methods=['GET'])
+def recent_route():
+    user_id = request.args.get('user_id')
+    if not user_id:
+        return jsonify({"message": "user_id가 필요합니다."}), 400
 
-@app.route('/search_routes', methods=['POST'])
-def search_routes():
-    data = request.get_json(silent=True) or {}
+    r = Route.query.filter_by(user_id=user_id).order_by(Route.id.desc()).first()
+    if not r:
+        return jsonify({"message": "최근 이용한 경로가 없습니다."}), 404
 
-    categories = data.get('categories')
-    if not isinstance(categories, dict):
-        return jsonify({"message": "카테고리가 제공되지 않았거나 형식이 올바르지 않습니다."}), 400
+    user = User.query.filter_by(user_id=user_id).first()
+    return jsonify({
+        "route_name": r.route_name,
+        "nickname": user.nickname if user else user_id,
+        "route_path": _safe_json_loads(r.route_path, []),
+        "polyline": _safe_json_loads(r.route_path, []),
+    })
 
-    only_fav = bool(data.get('onlyFavorites', False))
-    fav_user_id = data.get('user_id')
+@app.route('/save_recent_route', methods=['POST'])
+def save_recent_route():
+    return jsonify({"status": "ok"})
 
-    # 문자열 비교를 위해 LIKE 필터 사용
-    q = Route.query
-    for cat_type, tags in categories.items():
-        if tags:  # 비어있지 않으면 필터 적용
-            conditions = [Route.category.like(f"%{t}%") for t in tags]
-            from sqlalchemy import or_
-            q = q.filter(or_(*conditions))
+@app.route('/delete_route/<int:route_id>', methods=['DELETE'])
+def delete_route(route_id):
+    route_to_delete = Route.query.get(route_id)
+    if not route_to_delete:
+        return jsonify({"message": "경로를 찾을 수 없습니다."}), 404
+    try:
+        FavoriteRoute.query.filter_by(route_id=route_id).delete()
+        db.session.delete(route_to_delete)
+        db.session.commit()
+        return jsonify({"message": "경로가 성공적으로 삭제되었습니다."}), 200
+    except Exception as e:
+        db.session.rollback()
+        print(f"[delete_route] 오류: {e}")
+        return jsonify({"message": f"경로 삭제 실패: 서버 내부 오류. ({str(e)})"}), 500
 
-    if only_fav:
-        if not fav_user_id:
-            return jsonify({"message": "즐겨찾기 필터에는 user_id가 필요합니다."}), 400
-        sub = db.session.query(FavoriteRoute.route_id).filter(FavoriteRoute.user_id == fav_user_id).subquery()
-        q = q.filter(Route.id.in_(sub))
+@app.route('/routes', methods=['GET'])
+def get_routes():
+    user_id = request.args.get('user_id')
 
-    routes = q.all()
-    if not routes:
-        return jsonify({"message": "조건에 맞는 경로가 없습니다."}), 404
+    favorite_route_ids = set()
+    if user_id:
+        try:
+            favorite_route_ids = {
+                rid for (rid,) in db.session.query(FavoriteRoute.route_id)
+                .filter(FavoriteRoute.user_id == user_id).all()
+            }
+        except Exception as e:
+            print(f"[get_routes] FavoriteRoute 조회 실패: {e}")
+            favorite_route_ids = set()
 
-    result = []
-    for r in routes:
-        user = User.query.filter_by(user_id=r.user_id).first()
-        result.append({
-            "id": r.id,
-            "route_name": r.route_name,
-            "nickname": user.nickname if user else r.user_id,
-            "polyline": _safe_json_loads(r.route_path, []),
-            "category": r.category,
-        })
+    routes = Route.query.filter_by(user_id=user_id).all() if user_id else Route.query.all()
 
-    return jsonify({"routes": result}), 200
-
-# ======================= 랜덤 경로 =======================
+    return jsonify({
+        "routes": [
+            {
+                "id": r.id,
+                "user_id": r.user_id,
+                "route_name": r.route_name,
+                "route_path": _safe_json_loads(r.route_path, []),
+                "polyline": _safe_json_loads(r.route_path, []),
+                "category": r.category,
+                "is_favorite": r.id in favorite_route_ids
+            }
+            for r in routes
+        ]
+    })
 
 @app.route('/random_user_route', methods=['GET'])
 def random_user_route():
@@ -240,8 +262,11 @@ def random_user_route():
                 if isinstance(v, list):
                     return [str(x) for x in v]
             except:
-                return [x.strip() for x in param.split(',') if x.strip()]
-        return [str(param)]
+                out = [x.strip() for x in param.split(',') if x.strip()]
+                return out if out else None
+        if isinstance(param, (int, float)):
+            return [str(int(param))]
+        return None
 
     cat_ids = _parse_category_param(category_param)
 
@@ -251,9 +276,7 @@ def random_user_route():
             return jsonify({"message": "등록된 경로가 없습니다."}), 404
         route = random.choice(all_routes)
     else:
-        matched = Route.query.filter(
-            Route.category.in_(cat_ids)
-        ).all()
+        matched = Route.query.filter(Route.category.in_(cat_ids)).all()
         if not matched:
             return jsonify({"message": "조건에 맞는 경로가 없습니다."}), 404
         route = random.choice(matched)
@@ -266,7 +289,7 @@ def random_user_route():
         "polyline": _safe_json_loads(route.route_path, []),
     })
 
-# ======================= Favorites (즐겨찾기) =======================
+# ======================= Favorites =======================
 
 @app.route('/toggle_favorite', methods=['POST'])
 def toggle_favorite():
@@ -300,30 +323,28 @@ def toggle_favorite():
 @app.route('/favorites', methods=['GET'])
 def get_favorites():
     user_id = request.args.get("user_id")
-    category = request.args.get("category")  # 정수 ID 또는 미지정
+    category = request.args.get("category")
 
     if not user_id:
         return jsonify({"message": "user_id가 제공되지 않았습니다."}), 400
 
-    # favorite_route JOIN route
     q = db.session.query(FavoriteRoute, Route).join(
         Route, FavoriteRoute.route_id == Route.id
     ).filter(FavoriteRoute.user_id == user_id)
 
-    # 카테고리 정수 필터
-    if category and str(category).isdigit():
-        q = q.filter(Route.category == int(category))
+    if category:
+        q = q.filter(Route.category == str(category))
 
     rows = q.all()
 
     return jsonify({
         "favorites": [
             {
-                "id": route.id,  # 경로 id
+                "id": route.id,
                 "user_id": route.user_id,
                 "route_name": route.route_name,
                 "route_path": _safe_json_loads(route.route_path, []),
-                "polyline": _safe_json_loads(route.route_path, []),  # 호환 키
+                "polyline": _safe_json_loads(route.route_path, []),
                 "category": route.category,
                 "is_favorite": True
             }
@@ -336,17 +357,15 @@ def is_favorite():
     data = request.get_json(silent=True) or {}
     user_id = data.get("user_id")
     route_id = data.get("route_id")
-    route_path = data.get("route_path")  # 구버전 호환용
+    route_path = data.get("route_path")
 
     if not user_id:
         return jsonify({"message": "user_id는 필수입니다."}), 400
 
-    # 1) route_id로 확인 (권장)
     if route_id is not None:
         fav = FavoriteRoute.query.filter_by(user_id=user_id, route_id=route_id).first()
         return jsonify({"is_favorite": fav is not None})
 
-    # 2) route_path로 확인 (구버전)
     if route_path is not None:
         wanted = route_path
         q = db.session.query(FavoriteRoute, Route).join(
@@ -364,14 +383,6 @@ def is_favorite():
 
 @app.route('/search_routes', methods=['POST'])
 def search_routes():
-    """
-    요청 예시 (프런트):
-    {
-      "categories": { "길 유형": [104], "이동수단": [], "지역": [] },
-      "onlyFavorites": false,
-      "user_id": "yun123"   // onlyFavorites=true일 때 필요
-    }
-    """
     data = request.get_json(silent=True) or {}
 
     categories = data.get('categories')
@@ -381,19 +392,13 @@ def search_routes():
     only_fav = bool(data.get('onlyFavorites', False))
     fav_user_id = data.get('user_id')
 
-    # 현재 DB는 route.category INT 하나만 존재 → '길 유형'만 필터 가능
     road_type_ids = categories.get('길 유형') or []
-    road_type_ids = [
-        int(x) for x in road_type_ids
-        if (isinstance(x, (int, float)) or (isinstance(x, str) and x.isdigit()))
-    ]
+    road_type_ids = [str(x) for x in road_type_ids if x != '']
 
-    # 필터 없으면(빈 배열) 전체 조회 허용
     q = Route.query
     if road_type_ids:
         q = q.filter(Route.category.in_(road_type_ids))
 
-    # 즐겨찾기만 보기 옵션
     if only_fav:
         if not fav_user_id:
             return jsonify({"message": "즐겨찾기 필터에는 user_id가 필요합니다."}), 400
@@ -404,7 +409,6 @@ def search_routes():
     if not routes:
         return jsonify({"message": "조건에 맞는 경로가 없습니다."}), 404
 
-    # 응답: 프런트가 기대하는 키 포함 (polyline 별칭도 제공)
     result = []
     for r in routes:
         user = User.query.filter_by(user_id=r.user_id).first()
@@ -413,7 +417,7 @@ def search_routes():
             "route_name": r.route_name,
             "nickname": user.nickname if user else r.user_id,
             "polyline": _safe_json_loads(r.route_path, []),
-            "category": r.category,   # INT 그대로
+            "category": r.category,
         })
 
     return jsonify({"routes": result}), 200
@@ -426,7 +430,7 @@ if __name__ == '__main__':
 
     with app.app_context():
         try:
-            db.create_all()  # 없는 테이블만 생성, 기존 스키마 건드리지 않음
+            db.create_all()
         except Exception as e:
             print(f"db.create_all() 경고: {e}")
 
