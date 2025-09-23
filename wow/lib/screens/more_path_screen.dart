@@ -39,8 +39,8 @@ class _MorePathScreenState extends State<MorePathScreen> {
     setState(() {
       switch (_selectedAlgorithm) {
         case '연관성':
-          routesToShow.sort((a, b) =>
-              (a['route_name'] ?? '').compareTo(b['route_name'] ?? ''));
+          routesToShow.sort(
+                  (a, b) => (a['route_name'] ?? '').compareTo(b['route_name'] ?? ''));
           break;
         case '좋아요 높은순':
           routesToShow.sort((b, a) =>
@@ -111,7 +111,7 @@ class _MorePathScreenState extends State<MorePathScreen> {
     final rating = route['rating'] ?? 0.0;
 
     // selectedTags를 기반으로 태그 표시
-    final tagWidgets = _buildTagWidgets(route['selectedTags'] ?? {});
+    final tagWidgets = _buildTagWidgets(route);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
@@ -155,6 +155,13 @@ class _MorePathScreenState extends State<MorePathScreen> {
                               style: const TextStyle(color: Colors.black)),
                         ],
                       ),
+                      const SizedBox(height: 4),
+                      Text(
+                          '지역: ${_mapRegionIdToLabel(route['region_id'])}'),
+                      Text(
+                          '길 유형: ${_mapRoadTypeIdToLabel(route['road_type_id'])}'),
+                      Text(
+                          '이동수단: ${_mapTransportIdToLabel(route['transport_id'])}'),
                       const SizedBox(height: 4),
                       Row(
                         children: [
@@ -207,57 +214,68 @@ class _MorePathScreenState extends State<MorePathScreen> {
     );
   }
 
-  List<Widget> _buildTagWidgets(Map<String, String> selectedTags) {
+  List<Widget> _buildTagWidgets(Map<String, dynamic> route) {
     final List<Widget> chips = [];
-    selectedTags.forEach((category, value) {
-      if (value.isEmpty) return;
-      final tagList = value.split(',');
-      for (final tag in tagList) {
-        chips.add(
-          Chip(
-            label: Text(_mapIdToLabel(category, tag),
-                style: const TextStyle(fontSize: 12, color: Colors.black87)),
-            backgroundColor: Colors.grey.shade200,
-          ),
-        );
-      }
-    });
+
+    if (route['region_id'] != null) {
+      chips.add(_buildChip('지역', _mapRegionIdToLabel(route['region_id'])));
+    }
+    if (route['road_type_id'] != null) {
+      chips.add(_buildChip('길 유형', _mapRoadTypeIdToLabel(route['road_type_id'])));
+    }
+    if (route['transport_id'] != null) {
+      chips.add(_buildChip('이동수단', _mapTransportIdToLabel(route['transport_id'])));
+    }
+
     return chips;
   }
 
-  String _mapIdToLabel(String category, String idStr) {
-    final id = int.tryParse(idStr);
-    if (category == '길 유형') {
-      switch (id) {
-        case 101:
-          return '포장도로';
-        case 102:
-          return '비포장도로';
-        case 103:
-          return '등산로';
-        case 104:
-          return '짧은 산책로';
-        case 105:
-          return '긴 산책로';
-        case 106:
-          return '운동용 산책로';
-      }
-    } else if (category == '이동수단') {
-      switch (id) {
-        case 201:
-          return '걷기';
-        case 202:
-          return '뜀걸음';
-        case 203:
-          return '자전거';
-        case 204:
-          return '휠체어';
-        case 205:
-          return '유모차';
-      }
-    } else if (category == '지역') {
-      return idStr.replaceAll('/', ' - ');
+  Widget _buildChip(String category, String label) {
+    return Chip(
+      label: Text(label,
+          style: const TextStyle(fontSize: 12, color: Colors.black87)),
+      backgroundColor: Colors.grey.shade200,
+    );
+  }
+
+  String _mapRegionIdToLabel(dynamic id) {
+    if (id == null) return '-';
+    return id.toString(); // 필요 시 idToRegion 맵으로 치환 가능
+  }
+
+  String _mapRoadTypeIdToLabel(dynamic id) {
+    switch (id) {
+      case 101:
+        return '포장도로';
+      case 102:
+        return '비포장도로';
+      case 103:
+        return '등산로';
+      case 104:
+        return '짧은 산책로';
+      case 105:
+        return '긴 산책로';
+      case 106:
+        return '운동용 산책로';
+      default:
+        return '-';
     }
-    return idStr;
+  }
+
+  String _mapTransportIdToLabel(dynamic id) {
+    switch (id) {
+      case 201:
+        return '걷기';
+      case 202:
+        return '뜀걸음';
+      case 203:
+        return '자전거';
+      case 204:
+        return '휠체어';
+      case 205:
+        return '유모차';
+      default:
+        return '-';
+    }
   }
 }

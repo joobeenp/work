@@ -181,10 +181,10 @@ class _SearchScreenState extends State<SearchScreen> {
     final Map<String, dynamic> result = {};
 
     selectedTags.forEach((category, tags) {
-      List<int> ids = [];
-      if (category == '지역') ids = tags.map((t) => regionToId[t]).whereType<int>().toList();
-      if (category == '길 유형') ids = tags.map((t) => roadTypeToId[t]).whereType<int>().toList();
-      if (category == '이동수단') ids = tags.map((t) => transportToId[t]).whereType<int>().toList();
+      List<String> ids = [];
+      if (category == '지역') ids = tags.map((t) => regionToId[t]?.toString()).whereType<String>().toList();
+      if (category == '길 유형') ids = tags.map((t) => roadTypeToId[t]?.toString()).whereType<String>().toList();
+      if (category == '이동수단') ids = tags.map((t) => transportToId[t]?.toString()).whereType<String>().toList();
 
       result[category] = ids;
     });
@@ -449,7 +449,7 @@ class _SearchScreenState extends State<SearchScreen> {
         body: json.encode({
           "categories": selectedData,
           "onlyFavorites": onlyFavorites,
-          "matchType": "AND", // AND 검색임을 명시
+          "matchType": "AND", // 서버에서 AND 조건 처리
         }),
       ).timeout(const Duration(seconds: 10));
 
@@ -461,7 +461,7 @@ class _SearchScreenState extends State<SearchScreen> {
           context,
           MaterialPageRoute(
             builder: (_) => SearchedScreen(
-              selectedTags: selectedData,
+              selectedTags: getSelectedTagData(), // ID 리스트만 전달
               onlyFavorites: onlyFavorites,
               searchResults: routes,
             ),

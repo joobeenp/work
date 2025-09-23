@@ -6,7 +6,7 @@ import 'more_path_screen.dart';
 import 'running_start.dart';
 
 class SearchedScreen extends StatefulWidget {
-  final Map<String, dynamic> selectedTags; // 쉼표로 연결된 ID 문자열
+  final Map<String, dynamic> selectedTags; // { "지역": [1,2], "길 유형": [101], "이동수단": [201] }
   final bool onlyFavorites;
   final List<dynamic> searchResults;
 
@@ -25,6 +25,34 @@ class _SearchedScreenState extends State<SearchedScreen> {
   Map<String, dynamic>? selectedRoute;
   Position? currentPosition;
   final MapController _mapController = MapController();
+
+  // ID → 이름 매핑
+  final Map<int, String> idToRegion = {
+    1: '중구/광복동', 2: '중구/남포동', 3: '중구/대청동', 4: '중구/동광동', 5: '중구/보수동', 6: '중구/부평동',
+    7: '서구/동대신동', 8: '서구/서대신동', 9: '서구/암남동', 10: '서구/아미동', 11: '서구/토성동',
+    12: '동구/초량동', 13: '동구/수정동', 14: '동구/좌천동', 15: '동구/범일동',
+    16: '영도구/남항동', 17: '영도구/신선동', 18: '영도구/봉래동', 19: '영도구/청학동', 20: '영도구/동삼동',
+    21: '부산진구/부전동', 22: '부산진구/전포동', 23: '부산진구/양정동', 24: '부산진구/범전동', 25: '부산진구/범천동', 26: '부산진구/가야동',
+    27: '동래구/명장동', 28: '동래구/사직동', 29: '동래구/안락동', 30: '동래구/온천동', 31: '동래구/수안동',
+    32: '남구/대연동', 33: '남구/문현동', 34: '남구/감만동', 35: '남구/용호동', 36: '남구/우암동',
+    37: '북구/구포동', 38: '북구/덕천동', 39: '북구/만덕동', 40: '북구/화명동',
+    41: '해운대구/우동', 42: '해운대구/중동', 43: '해운대구/좌동', 44: '해운대구/송정동', 45: '해운대구/재송동',
+    46: '사하구/괴정동', 47: '사하구/당리동', 48: '사하구/하단동', 49: '사하구/장림동', 50: '사하구/다대동',
+    51: '금정구/장전동', 52: '금정구/구서동', 53: '금정구/부곡동', 54: '금정구/서동', 55: '금정구/금사동',
+    56: '강서구/명지동', 57: '강서구/가락동', 58: '강서구/녹산동', 59: '강서구/대저1동', 60: '강서구/대저2동',
+    61: '연제구/연산동',
+    62: '수영구/광안동', 63: '수영구/남천동', 64: '수영구/망미동', 65: '수영구/민락동',
+    66: '사상구/감전동', 67: '사상구/괘법동', 68: '사상구/덕포동', 69: '사상구/모라동',
+    70: '기장군/기장읍', 71: '기장군/정관읍', 72: '기장군/일광읍', 73: '기장군/철마면', 74: '기장군/장안읍',
+  };
+
+  final Map<int, String> idToRoadType = {
+    101: '포장도로', 102: '비포장도로', 103: '등산로', 104: '짧은 산책로', 105: '긴 산책로', 106: '운동용 산책로',
+  };
+
+  final Map<int, String> idToTransport = {
+    201: '걷기', 202: '뜀걸음', 203: '자전거', 204: '휠체어', 205: '유모차',
+  };
 
   @override
   void initState() {
@@ -98,7 +126,7 @@ class _SearchedScreenState extends State<SearchedScreen> {
       body: Column(
         children: [
           // 선택된 태그 표시
-          if (widget.selectedTags.values.any((str) => str.isNotEmpty))
+          if (widget.selectedTags.values.any((v) => v.isNotEmpty))
             Container(
               width: double.infinity,
               color: Colors.white,
@@ -110,7 +138,7 @@ class _SearchedScreenState extends State<SearchedScreen> {
               ),
             ),
 
-          // 지도 영역
+          // 지도
           Expanded(
             flex: 4,
             child: FlutterMap(
@@ -159,7 +187,7 @@ class _SearchedScreenState extends State<SearchedScreen> {
           ),
           const SizedBox(height: 8),
 
-          // 선택한 경로 카드
+          // 선택된 경로 카드
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: _buildSelectedRouteCard(selectedRoute),
@@ -184,7 +212,7 @@ class _SearchedScreenState extends State<SearchedScreen> {
                               builder: (_) => MorePathScreen(
                                 allRoutes: widget.searchResults.cast<Map<String, dynamic>>(),
                                 selectedTags: widget.selectedTags
-                                    .map((key, value) => MapEntry(key, value.toString())), // <- 여기서 변환
+                                    .map((key, value) => MapEntry(key, value.toString())),
                                 onRouteSelected: (route) {
                                   setState(() {
                                     selectedRoute = route;
@@ -237,6 +265,10 @@ class _SearchedScreenState extends State<SearchedScreen> {
                           Text(routeName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                           const SizedBox(height: 4),
                           Text('생성자: $creatorName'),
+                          const SizedBox(height: 2),
+                          Text('지역: ${idToRegion[route['region_id']] ?? '-'}'),
+                          Text('길 유형: ${idToRoadType[route['road_type_id']] ?? '-'}'),
+                          Text('이동수단: ${idToTransport[route['transport_id']] ?? '-'}'),
                           const SizedBox(height: 6),
                           Row(
                             children: [
@@ -264,50 +296,34 @@ class _SearchedScreenState extends State<SearchedScreen> {
 
   List<Widget> _buildSelectedTagChips() {
     final List<Widget> chips = [];
-    final sortedCategories = widget.selectedTags.keys.toList()..sort();
-    for (final category in sortedCategories) {
-      final tagStr = widget.selectedTags[category]!; // dynamic 타입 처리
-      if (tagStr.isEmpty) continue;
 
-      final tagIds = tagStr.toString().split(',');
-      for (final tag in tagIds) {
-        String label;
-        if (category == '지역') {
-          label = tag.replaceAll('/', ' - ');
-        } else {
-          label = _mapIdToLabel(category, int.tryParse(tag) ?? 0);
+    widget.selectedTags.forEach((category, ids) {
+      if (ids is List && ids.isNotEmpty) {
+        for (final id in ids) {
+          String label;
+          if (category == '지역') {
+            label = idToRegion[id] ?? '';
+          } else if (category == '길 유형') {
+            label = idToRoadType[id] ?? '';
+          } else if (category == '이동수단') {
+            label = idToTransport[id] ?? '';
+          } else {
+            label = id.toString();
+          }
+
+          if (label.isNotEmpty) {
+            chips.add(
+              Chip(
+                label: Text(label, style: const TextStyle(fontSize: 14, color: Colors.black87)),
+                backgroundColor: Colors.grey.shade200,
+              ),
+            );
+          }
         }
-        chips.add(
-          Chip(
-            label: Text(label, style: const TextStyle(fontSize: 14, color: Colors.black87)),
-            backgroundColor: Colors.grey.shade200,
-          ),
-        );
       }
-    }
-    return chips;
-  }
+    });
 
-  String _mapIdToLabel(String category, int id) {
-    if (category == '길 유형') {
-      switch (id) {
-        case 101: return '포장도로';
-        case 102: return '비포장도로';
-        case 103: return '등산로';
-        case 104: return '짧은 산책로';
-        case 105: return '긴 산책로';
-        case 106: return '운동용 산책로';
-      }
-    } else if (category == '이동수단') {
-      switch (id) {
-        case 201: return '걷기';
-        case 202: return '뜀걸음';
-        case 203: return '자전거';
-        case 204: return '휠체어';
-        case 205: return '유모차';
-      }
-    }
-    return id.toString();
+    return chips;
   }
 
   Widget _buildSelectedRouteCard(Map<String, dynamic>? route) {
@@ -327,6 +343,10 @@ class _SearchedScreenState extends State<SearchedScreen> {
             Text(routeName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
             Text('생성자: $creatorName'),
+            const SizedBox(height: 4),
+            Text('지역: ${idToRegion[route?['region_id']] ?? '-'}'),
+            Text('길 유형: ${idToRoadType[route?['road_type_id']] ?? '-'}'),
+            Text('이동수단: ${idToTransport[route?['transport_id']] ?? '-'}'),
             const SizedBox(height: 6),
             Row(
               children: [
