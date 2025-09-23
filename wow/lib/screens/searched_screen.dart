@@ -5,10 +5,13 @@ import 'package:geolocator/geolocator.dart';
 import 'more_path_screen.dart';
 import 'running_start.dart';
 
+// 🔹 SearchScreen에서 넘겨받는 selectedTags는 이미 ID 매핑된 상태라고 가정
+// 예: { "길 유형": [101, 102], "이동수단": [201], "지역": ["해운대구/우동"] }
+
 class SearchedScreen extends StatefulWidget {
-  final Map<String, List<String>> selectedTags;
+  final Map<String, List<dynamic>> selectedTags; // ID 매핑된 태그
   final bool onlyFavorites;
-  final List<dynamic> searchResults;
+  final List<dynamic> searchResults; // 서버에서 받은 경로 데이터
 
   const SearchedScreen({
     Key? key,
@@ -80,12 +83,13 @@ class _SearchedScreenState extends State<SearchedScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final routesToShow = widget.searchResults.length > 3
+    final routesToShow = (widget.searchResults.length > 3
         ? widget.searchResults.sublist(0, 3)
-        : widget.searchResults;
+        : widget.searchResults)
+        .cast<Map<String, dynamic>>();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F4EC),
+      backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
         backgroundColor: const Color(0xFF2D2D2D),
         title: const Text('지도 (선택 경로)', style: TextStyle(color: Colors.white)),
@@ -96,6 +100,19 @@ class _SearchedScreenState extends State<SearchedScreen> {
       ),
       body: Column(
         children: [
+          // 선택된 태그 표시
+          if (widget.selectedTags.values.any((list) => list.isNotEmpty))
+            Container(
+              width: double.infinity,
+              color: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: _buildSelectedTagChips(),
+              ),
+            ),
+
           // 지도 영역
           Expanded(
             flex: 4,
@@ -113,13 +130,15 @@ class _SearchedScreenState extends State<SearchedScreen> {
                   subdomains: const ['a', 'b', 'c'],
                 ),
                 if (selectedRoute != null)
-                  PolylineLayer(polylines: [
-                    Polyline(
-                      points: _convertToLatLngList(selectedRoute!['polyline']),
-                      color: Colors.blue,
-                      strokeWidth: 4,
-                    ),
-                  ]),
+                  PolylineLayer(
+                    polylines: [
+                      Polyline(
+                        points: _convertToLatLngList(selectedRoute!['polyline']),
+                        color: Colors.blueAccent.shade400,
+                        strokeWidth: 4,
+                      ),
+                    ],
+                  ),
                 if (currentPosition != null)
                   MarkerLayer(
                     markers: [
@@ -143,14 +162,14 @@ class _SearchedScreenState extends State<SearchedScreen> {
           ),
           const SizedBox(height: 8),
 
-          // 선택한 경로 영역
+          // 선택한 경로 카드
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: _buildSelectedRouteCard(selectedRoute),
           ),
           const SizedBox(height: 8),
 
-          // 경로 목록 영역
+          // 경로 목록
           Expanded(
             flex: 5,
             child: ListView.builder(
@@ -166,7 +185,7 @@ class _SearchedScreenState extends State<SearchedScreen> {
                             context,
                             MaterialPageRoute(
                               builder: (_) => MorePathScreen(
-                                allRoutes: widget.searchResults,
+                                allRoutes: widget.searchResults.cast<Map<String, dynamic>>(),
                                 selectedRoute: selectedRoute,
                                 onRouteSelected: (route) {
                                   setState(() {
@@ -198,51 +217,43 @@ class _SearchedScreenState extends State<SearchedScreen> {
                 final creatorName = route['nickname'] ?? '알 수 없음';
                 final favoriteCount = route['favoriteCount'] ?? 0;
                 final rating = route['rating'] ?? 0.0;
+                final isSelected = selectedRoute == route;
 
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 12, left: 16, right: 16),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                return GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      selectedRoute = route;
+                    });
+                    _fitMapBounds();
+                  },
+                  child: Card(
+                    color: isSelected ? Colors.blue[50] : Colors.white,
+                    elevation: isSelected ? 4 : 1,
+                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(routeName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                          const SizedBox(height: 4),
+                          Text('생성자: $creatorName'),
+                          const SizedBox(height: 6),
+                          Row(
                             children: [
-                              Text(routeName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                              const SizedBox(height: 4),
-                              Text('생성자: $creatorName'),
-                              const SizedBox(height: 6),
-                              Row(
-                                children: [
-                                  const Icon(Icons.favorite, color: Colors.red, size: 16),
-                                  const SizedBox(width: 4),
-                                  Text('$favoriteCount'),
-                                  const SizedBox(width: 8),
-                                  const Icon(Icons.star, color: Colors.amber, size: 16),
-                                  const SizedBox(width: 4),
-                                  Text(rating.toStringAsFixed(1)),
-                                ],
-                              ),
+                              const Icon(Icons.favorite, color: Colors.red, size: 16),
+                              const SizedBox(width: 4),
+                              Text('$favoriteCount'),
+                              const SizedBox(width: 12),
+                              const Icon(Icons.star, color: Colors.amber, size: 16),
+                              const SizedBox(width: 4),
+                              Text(rating.toStringAsFixed(1)),
                             ],
                           ),
-                        ),
+                        ],
                       ),
-                      ElevatedButton(
-                        onPressed: () {
-                          setState(() {
-                            selectedRoute = route;
-                          });
-                          _fitMapBounds();
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF3CAEA3),
-                          foregroundColor: Colors.white,
-                        ),
-                        child: const Text('선택'),
-                      ),
-                      const SizedBox(width: 8),
-                    ],
+                    ),
                   ),
                 );
               },
@@ -251,6 +262,52 @@ class _SearchedScreenState extends State<SearchedScreen> {
         ],
       ),
     );
+  }
+
+  List<Widget> _buildSelectedTagChips() {
+    final List<Widget> chips = [];
+    final sortedCategories = widget.selectedTags.keys.toList()..sort();
+    for (final category in sortedCategories) {
+      final tags = widget.selectedTags[category]!.toList()..sort((a, b) => a.toString().compareTo(b.toString()));
+      for (final tag in tags) {
+        String label;
+        if (category == '지역') {
+          label = tag.toString().replaceAll('/', ' - ');
+        } else {
+          // 숫자 ID를 사람이 읽을 수 있는 텍스트로 변환
+          label = _mapIdToLabel(category, tag);
+        }
+        chips.add(
+          Chip(
+            label: Text(label, style: const TextStyle(fontSize: 14, color: Colors.black87)),
+            backgroundColor: Colors.grey.shade200,
+          ),
+        );
+      }
+    }
+    return chips;
+  }
+
+  String _mapIdToLabel(String category, dynamic id) {
+    if (category == '길 유형') {
+      switch (id) {
+        case 101: return '산책로';
+        case 102: return '자전거도로';
+        case 103: return '등산로';
+        case 104: return '도심 산책';
+        case 105: return '해변 산책';
+        case 106: return '호수/공원';
+      }
+    } else if (category == '이동수단') {
+      switch (id) {
+        case 201: return '도보';
+        case 202: return '자전거';
+        case 203: return '킥보드';
+        case 204: return '런닝';
+        case 205: return '기타';
+      }
+    }
+    return id.toString();
   }
 
   Widget _buildSelectedRouteCard(Map<String, dynamic>? route) {

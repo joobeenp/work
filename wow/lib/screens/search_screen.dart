@@ -14,7 +14,10 @@ class SearchScreen extends StatefulWidget {
 class _SearchScreenState extends State<SearchScreen> {
   String? activeDropdown;
   bool onlyFavorites = false;
+  String _searchQuery = '';
+  String? _currentGu;
 
+  // 태그 데이터
   final Map<String, List<String>> tagData = {
     '길 유형': ['포장도로', '비포장도로', '등산로', '짧은 산책로', '긴 산책로', '운동용 산책로'],
     '이동수단': ['걷기', '뜀걸음', '자전거', '휠체어', '유모차'],
@@ -44,13 +47,51 @@ class _SearchScreenState extends State<SearchScreen> {
     '기장군': ['기장읍','정관읍','일광읍','철마면','장안읍'],
   };
 
+  // 선택된 태그
   final Map<String, Set<String>> selectedTags = {
     '지역': {},
     '길 유형': {},
     '이동수단': {},
   };
 
-  String? _currentGu;
+  // 매핑: 지역 → ID
+  final Map<String, int> regionToId = {
+    '중구/광복동': 1, '중구/남포동': 2, '중구/대청동': 3, '중구/동광동': 4, '중구/보수동': 5, '중구/부평동': 6,
+    '서구/동대신동': 7, '서구/서대신동': 8, '서구/암남동': 9, '서구/아미동': 10, '서구/토성동': 11,
+    '동구/초량동': 12, '동구/수정동': 13, '동구/좌천동': 14, '동구/범일동': 15,
+    '영도구/남항동': 16, '영도구/신선동': 17, '영도구/봉래동': 18, '영도구/청학동': 19, '영도구/동삼동': 20,
+    '부산진구/부전동': 21, '부산진구/전포동': 22, '부산진구/양정동': 23, '부산진구/범전동': 24, '부산진구/범천동': 25, '부산진구/가야동': 26,
+    '동래구/명장동': 27, '동래구/사직동': 28, '동래구/안락동': 29, '동래구/온천동': 30, '동래구/수안동': 31,
+    '남구/대연동': 32, '남구/문현동': 33, '남구/감만동': 34, '남구/용호동': 35, '남구/우암동': 36,
+    '북구/구포동': 37, '북구/덕천동': 38, '북구/만덕동': 39, '북구/화명동': 40,
+    '해운대구/우동': 41, '해운대구/중동': 42, '해운대구/좌동': 43, '해운대구/송정동': 44, '해운대구/재송동': 45,
+    '사하구/괴정동': 46, '사하구/당리동': 47, '사하구/하단동': 48, '사하구/장림동': 49, '사하구/다대동': 50,
+    '금정구/장전동': 51, '금정구/구서동': 52, '금정구/부곡동': 53, '금정구/서동': 54, '금정구/금사동': 55,
+    '강서구/명지동': 56, '강서구/가락동': 57, '강서구/녹산동': 58, '강서구/대저1동': 59, '강서구/대저2동': 60,
+    '연제구/연산동': 61,
+    '수영구/광안동': 62, '수영구/남천동': 63, '수영구/망미동': 64, '수영구/민락동': 65,
+    '사상구/감전동': 66, '사상구/괘법동': 67, '사상구/덕포동': 68, '사상구/모라동': 69,
+    '기장군/기장읍': 70, '기장군/정관읍': 71, '기장군/일광읍': 72, '기장군/철마면': 73, '기장군/장안읍': 74,
+  };
+
+  // 매핑: 길 유형 → ID
+  final Map<String, int> roadTypeToId = {
+    '포장도로': 101,
+    '비포장도로': 102,
+    '등산로': 103,
+    '짧은 산책로': 104,
+    '긴 산책로': 105,
+    '운동용 산책로': 106,
+  };
+
+  // 매핑: 이동수단 → ID
+  final Map<String, int> transportToId = {
+    '걷기': 201,
+    '뜀걸음': 202,
+    '자전거': 203,
+    '휠체어': 204,
+    '유모차': 205,
+  };
 
   void toggleDropdown(String name) {
     setState(() {
@@ -83,6 +124,7 @@ class _SearchScreenState extends State<SearchScreen> {
       onlyFavorites = false;
       activeDropdown = null;
       _currentGu = null;
+      _searchQuery = '';
     });
   }
 
@@ -93,11 +135,24 @@ class _SearchScreenState extends State<SearchScreen> {
     });
   }
 
+  // 지역/길유형/이동수단 모두 ID 매핑
+  Map<String, dynamic> getSelectedTagData() {
+    final Map<String, dynamic> result = {};
+    selectedTags.forEach((category, tags) {
+      if (category == '지역') {
+        result[category] = tags.map((tag) => regionToId[tag]!).toList();
+      } else if (category == '길 유형') {
+        result[category] = tags.map((tag) => roadTypeToId[tag]!).toList();
+      } else if (category == '이동수단') {
+        result[category] = tags.map((tag) => transportToId[tag]!).toList();
+      }
+    });
+    return result;
+  }
+
   List<Widget> buildSelectedTagChips() {
     final List<Widget> chips = [];
-    final sortedCategories = selectedTags.keys.toList()..sort();
-    for (final category in sortedCategories) {
-      final tags = selectedTags[category]!.toList()..sort();
+    selectedTags.forEach((category, tags) {
       for (final tag in tags) {
         final label = category == '지역' ? tag.replaceAll('/', ' - ') : tag;
         chips.add(FilterChip(
@@ -111,14 +166,14 @@ class _SearchScreenState extends State<SearchScreen> {
               toggleTag(category, tag);
             }
           },
-          backgroundColor: Colors.grey.shade100,
-          selectedColor: Colors.lightBlueAccent.shade100,
+          backgroundColor: Colors.grey.shade200,
+          selectedColor: Colors.blueAccent.shade100,
           showCheckmark: false,
-          labelStyle: const TextStyle(fontSize: 14),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black87),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         ));
       }
-    }
+    });
     return chips;
   }
 
@@ -138,8 +193,7 @@ class _SearchScreenState extends State<SearchScreen> {
         title: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('[현재 지역]',
-                style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600, fontSize: 18)),
+            const Text('[현재 지역]', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600, fontSize: 18)),
             TextButton(
               onPressed: resetSelection,
               child: const Text('초기화', style: TextStyle(color: Colors.blueAccent, fontSize: 14)),
@@ -172,10 +226,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       child: Center(
                         child: Text(
                           '즐겨찾기',
-                          style: TextStyle(
-                            color: onlyFavorites ? Colors.white : Colors.black87,
-                            fontWeight: FontWeight.w500,
-                          ),
+                          style: TextStyle(color: onlyFavorites ? Colors.white : Colors.black87, fontWeight: FontWeight.w500),
                         ),
                       ),
                     ),
@@ -210,11 +261,7 @@ class _SearchScreenState extends State<SearchScreen> {
                         borderRadius: BorderRadius.circular(12),
                         boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
                       ),
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 6,
-                        children: buildSelectedTagChips(),
-                      ),
+                      child: Wrap(spacing: 8, runSpacing: 6, children: buildSelectedTagChips()),
                     ),
                 ],
               ),
@@ -231,20 +278,17 @@ class _SearchScreenState extends State<SearchScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
                 onPressed: () async {
-                  final filteredTags = getFilteredTags();
-                  final allSelectedTags = [
-                    ...filteredTags['지역'] ?? [],
-                    ...filteredTags['길 유형'] ?? [],
-                    ...filteredTags['이동수단'] ?? [],
-                  ];
-
+                  final selectedData = getSelectedTagData();
                   final url = Uri.parse('${ApiService.baseUrl}/search_routes');
 
                   try {
                     final response = await http.post(
                       url,
                       headers: {'Content-Type': 'application/json'},
-                      body: json.encode({"categories": allSelectedTags}),
+                      body: json.encode({
+                        "categories": selectedData,
+                        "onlyFavorites": onlyFavorites,
+                      }),
                     ).timeout(const Duration(seconds: 10));
 
                     if (response.statusCode == 200) {
@@ -298,19 +342,9 @@ class _SearchScreenState extends State<SearchScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(
-                title,
-                style: TextStyle(
-                  color: isActive ? Colors.white : Colors.black87,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
-                ),
-              ),
+              Text(title, style: TextStyle(color: isActive ? Colors.white : Colors.black87, fontWeight: FontWeight.w600, fontSize: 14)),
               const SizedBox(width: 6),
-              Icon(
-                isActive ? Icons.arrow_drop_up : Icons.arrow_drop_down,
-                color: isActive ? Colors.white : Colors.black87,
-              ),
+              Icon(isActive ? Icons.arrow_drop_up : Icons.arrow_drop_down, color: isActive ? Colors.white : Colors.black87),
             ],
           ),
         ),
@@ -332,35 +366,66 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Widget buildRegionDropdown() {
+    final filteredGus = _busanGus.where((gu) {
+      return gu.contains(_searchQuery) || _busanDongs[gu]!.any((dong) => dong.contains(_searchQuery));
+    }).toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        DropdownButton<String>(
-          isExpanded: true,
-          value: _currentGu,
-          hint: const Text('구 선택'),
-          items: _busanGus.map((gu) => DropdownMenuItem(value: gu, child: Text(gu))).toList(),
-          onChanged: (val) => setState(() => _currentGu = val),
+        TextField(
+          decoration: const InputDecoration(
+            hintText: '구 또는 동 검색',
+            prefixIcon: Icon(Icons.search),
+            border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(8))),
+          ),
+          onChanged: (val) => setState(() => _searchQuery = val),
         ),
         const SizedBox(height: 8),
-        if (_currentGu != null)
-          Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            children: _busanDongs[_currentGu!]!.map((dong) {
-              final key = '$_currentGu/$dong';
-              return FilterChip(
-                label: Text(dong),
-                selected: selectedTags['지역']!.contains(key),
-                onSelected: (_) => toggleRegion(_currentGu!, dong),
-                backgroundColor: Colors.grey.shade100,
-                selectedColor: Colors.lightBlueAccent.shade100,
-                showCheckmark: false,
-                labelStyle: const TextStyle(fontSize: 14),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              );
-            }).toList(),
-          ),
+        ...filteredGus.map((gu) {
+          final dongs = _busanDongs[gu]!.where((dong) => dong.contains(_searchQuery)).toList();
+          final allSelected = dongs.every((dong) => selectedTags['지역']!.contains('$gu/$dong'));
+
+          return ExpansionTile(
+            title: Row(
+              children: [
+                Text(gu, style: const TextStyle(fontWeight: FontWeight.bold)),
+                const Spacer(),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      if (allSelected) {
+                        dongs.forEach((dong) => selectedTags['지역']!.remove('$gu/$dong'));
+                      } else {
+                        dongs.forEach((dong) => selectedTags['지역']!.add('$gu/$dong'));
+                      }
+                    });
+                  },
+                  child: Text(allSelected ? '전체 해제' : '전체 선택', style: const TextStyle(fontSize: 12)),
+                ),
+              ],
+            ),
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: dongs.map((dong) {
+                  final key = '$gu/$dong';
+                  return FilterChip(
+                    label: Text(dong),
+                    selected: selectedTags['지역']!.contains(key),
+                    onSelected: (_) => toggleRegion(gu, dong),
+                    backgroundColor: Colors.grey.shade200,
+                    selectedColor: Colors.blueAccent.shade200,
+                    showCheckmark: false,
+                    labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  );
+                }).toList(),
+              ),
+            ],
+          );
+        }).toList(),
       ],
     );
   }
@@ -376,11 +441,11 @@ class _SearchScreenState extends State<SearchScreen> {
           label: Text(tag),
           selected: isSelected,
           onSelected: (_) => toggleTag(category, tag),
-          backgroundColor: Colors.grey.shade100,
-          selectedColor: Colors.lightBlueAccent.shade100,
+          backgroundColor: Colors.grey.shade200,
+          selectedColor: Colors.blueAccent.shade100,
           showCheckmark: false,
-          labelStyle: const TextStyle(fontSize: 14),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black87),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         );
       }).toList(),
     );

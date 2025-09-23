@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class MorePathScreen extends StatefulWidget {
-  final List<dynamic> allRoutes; // 전체 경로
+  final List<Map<String, dynamic>> allRoutes; // 전체 경로
   final Map<String, dynamic>? selectedRoute; // 현재 선택된 경로
   final Function(Map<String, dynamic>) onRouteSelected; // 선택 시 콜백
 
@@ -26,7 +26,7 @@ class _MorePathScreenState extends State<MorePathScreen> {
     '즐겨찾기 낮은순',
   ];
 
-  late List<dynamic> routesToShow;
+  late List<Map<String, dynamic>> routesToShow;
 
   @override
   void initState() {
@@ -34,6 +34,7 @@ class _MorePathScreenState extends State<MorePathScreen> {
     _filterRoutes();
   }
 
+  /// 현재 선택된 경로 제외
   void _filterRoutes() {
     routesToShow = widget.allRoutes
         .where((route) => route != widget.selectedRoute)
@@ -41,10 +42,12 @@ class _MorePathScreenState extends State<MorePathScreen> {
     _sortRoutes();
   }
 
+  /// 선택된 알고리즘에 따라 정렬
   void _sortRoutes() {
     setState(() {
       switch (_selectedAlgorithm) {
         case '연관성':
+        // 연관성: route_name 기준 (간단 예시, 필요시 검색 키워드 기반 추천 로직 추가 가능)
           routesToShow.sort((a, b) =>
               (a['route_name'] ?? '').compareTo(b['route_name'] ?? ''));
           break;
@@ -110,6 +113,7 @@ class _MorePathScreenState extends State<MorePathScreen> {
     );
   }
 
+  /// 경로 카드 UI
   Widget _buildRouteCard(BuildContext context, Map<String, dynamic> route) {
     final routeName = route['route_name'] ?? '이름 없음';
     final creatorName = route['nickname'] ?? '알 수 없음';
@@ -133,6 +137,7 @@ class _MorePathScreenState extends State<MorePathScreen> {
                 borderRadius: BorderRadius.circular(8),
               ),
               margin: const EdgeInsets.only(right: 12),
+              child: const Icon(Icons.route, color: Colors.white70),
             ),
             Expanded(
               child: Column(
@@ -149,20 +154,26 @@ class _MorePathScreenState extends State<MorePathScreen> {
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      const Text('생성자: ', style: TextStyle(color: Colors.grey)),
-                      Text(creatorName, style: const TextStyle(color: Colors.black)),
+                      const Text('생성자: ',
+                          style: TextStyle(color: Colors.grey)),
+                      Text(creatorName,
+                          style: const TextStyle(color: Colors.black)),
                     ],
                   ),
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      const Icon(Icons.favorite, color: Colors.red, size: 18),
+                      const Icon(Icons.favorite,
+                          color: Colors.red, size: 18),
                       const SizedBox(width: 4),
-                      Text('$favoriteCount', style: const TextStyle(color: Colors.red)),
+                      Text('$favoriteCount',
+                          style: const TextStyle(color: Colors.red)),
                       const SizedBox(width: 12),
-                      const Icon(Icons.star, color: Colors.amber, size: 18),
+                      const Icon(Icons.star,
+                          color: Colors.amber, size: 18),
                       const SizedBox(width: 4),
-                      Text(rating.toStringAsFixed(1), style: const TextStyle(color: Colors.amber)),
+                      Text(rating.toStringAsFixed(1),
+                          style: const TextStyle(color: Colors.amber)),
                     ],
                   ),
                 ],
@@ -179,9 +190,11 @@ class _MorePathScreenState extends State<MorePathScreen> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
               ),
-              child: const Text('선택', style: TextStyle(fontWeight: FontWeight.bold)),
+              child: const Text('선택',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ],
         ),
