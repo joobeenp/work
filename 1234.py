@@ -25,7 +25,9 @@ class Route(db.Model):
     user_id = db.Column(db.String(80), nullable=False)
     route_name = db.Column(db.String(120), nullable=False)
     route_path = db.Column(db.Text)          # JSON 문자열
-    category = db.Column(db.String(20))      # VARCHAR로 변경
+    region_id = db.Column(db.String(10))     # VARCHAR(10)
+    road_type_id = db.Column(db.String(10))
+    transport_id = db.Column(db.String(10))
 
 class FavoriteRoute(db.Model):
     __tablename__ = 'favorite_route'
@@ -392,13 +394,21 @@ def search_routes():
     only_fav = bool(data.get('onlyFavorites', False))
     fav_user_id = data.get('user_id')
 
-    road_type_ids = categories.get('길 유형') or []
-    road_type_ids = [str(x) for x in road_type_ids if x != '']
-
     q = Route.query
-    if road_type_ids:
-        q = q.filter(Route.category.in_(road_type_ids))
 
+    # AND 조건으로 필터링
+    region_ids = categories.get('지역', [])
+    road_type_ids = categories.get('길 유형', [])
+    transport_ids = categories.get('이동수단', [])
+
+    if region_ids:
+        q = q.filter(Route.region_id.in_([str(x) for x in region_ids]))
+    if road_type_ids:
+        q = q.filter(Route.road_type_id.in_([str(x) for x in road_type_ids]))
+    if transport_ids:
+        q = q.filter(Route.transport_id.in_([str(x) for x in transport_ids]))
+
+    # 즐겨찾기 필터
     if only_fav:
         if not fav_user_id:
             return jsonify({"message": "즐겨찾기 필터에는 user_id가 필요합니다."}), 400
@@ -417,10 +427,13 @@ def search_routes():
             "route_name": r.route_name,
             "nickname": user.nickname if user else r.user_id,
             "polyline": _safe_json_loads(r.route_path, []),
-            "category": r.category,
+            "region_id": r.region_id,
+            "road_type_id": r.road_type_id,
+            "transport_id": r.transport_id,
         })
 
     return jsonify({"routes": result}), 200
+
 
 # ====================================================================
 
